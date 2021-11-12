@@ -9,3 +9,5 @@ serde_cbor = "0.11"
 k256 = { version = "0.9", features = [ "ecdsa" ] }
 universal_wallet = "0.5"
 blake3 = "1.2.0"
+p256 = { version = "0.9.0", features = [ "ecdsa" ] }
+ecdsa = "0.12"

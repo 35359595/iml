@@ -94,7 +94,7 @@ fn get_pk_bytes(c: Content) -> [u8; 32] {
 }
 
 #[test]
-fn new_iml_test() {
+fn new_iml_plus_verification_test() {
     let mut wallet = UnlockedWallet::new("test");
     let iml = Iml::new(&mut wallet);
     println!(
@@ -102,5 +102,5 @@ fn new_iml_test() {
         &iml.id,
         serde_cbor::to_vec(&iml).unwrap()
     );
-    assert!(true);
+    assert!(iml.verify());
 }

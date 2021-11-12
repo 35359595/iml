@@ -1,9 +1,13 @@
 use serde::{Deserialize, Serialize};
+mod getters;
 mod packer;
+mod processor;
+pub use getters::*;
 pub use packer::*;
+pub use processor::*;
 /// Inverted Microledger
 ///
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Iml {
     /// Blake 3 hash of current_sk, next_sk, current_dh, next_dh joined
     ///
@@ -45,8 +49,11 @@ pub struct Iml {
 /// Attachment structure.
 /// Can be any payload.
 ///
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Attachment {
+    /// `proof` of parent Iml
+    ///
+    parent: [u8; 32],
     /// Useful data itself
     ///
     payload: Vec<u8>,

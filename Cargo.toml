@@ -7,7 +7,7 @@ edition = "2021"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
 k256 = { version = "0.9", features = [ "ecdsa" ] }
-universal_wallet = "0.5"
+universal_wallet = { path = "../jolocom/wallet-rs" }
 blake3 = "1.2.0"
 p256 = { version = "0.9.0", features = [ "ecdsa" ] }
 ecdsa = "0.12"

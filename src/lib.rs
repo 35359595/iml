@@ -7,23 +7,28 @@ pub use packer::*;
 pub use processor::*;
 /// Inverted Microledger
 ///
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Iml {
     /// Blake 3 hash of current_sk, next_sk, current_dh, next_dh joined
     ///
     pub id: String,
+    /// Indicates "age" of identifier.
+    /// Is incremented on each evolution.
+    /// Used to detect possible degradation on verification.
+    ///
+    civilization: u64,
     /// Current ECDSA signing public key
     ///
-    current_sk: [u8; 32],
+    current_sk: Vec<u8>,
     /// Next ECDSA signing public key
     ///
-    next_sk: [u8; 32],
+    next_sk: Vec<u8>,
     /// Current DH agreement public key
     ///
-    current_dh: [u8; 32],
+    current_dh: Vec<u8>,
     /// Next DH agreement public key
     ///
-    next_dh: [u8; 32],
+    next_dh: Vec<u8>,
     /// Any usefull payload.
     /// Is not included into verification of Iml, but
     ///  has proof of it's own internally, therefore
@@ -33,6 +38,13 @@ pub struct Iml {
     ///
     #[serde(skip_serializing_if = "Option::is_none")]
     attachments: Option<Vec<Attachment>>,
+    /// Tthis property anchores attachment to the event.
+    /// Mandatory field if any attachments were present.
+    /// Stays in place even if attachments were withold
+    ///  or moved to next evolution state.
+    ///
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proof_of_attachments: Option<Vec<u8>>,
     /// Inverted previous state of Iml.
     /// Can be encrypted for 1-to-1 interaction.
     /// In that case key is DH shared secret between
@@ -43,17 +55,17 @@ pub struct Iml {
     /// ECDSA signature of rest of the Iml this proof and attachments excluded
     ///
     #[serde(skip_serializing_if = "Option::is_none")]
-    proof: Option<[u8; 32]>,
+    proof: Option<Vec<u8>>,
 }
 
 /// Attachment structure.
 /// Can be any payload.
 ///
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Attachment {
     /// `proof` of parent Iml
     ///
-    parent: [u8; 32],
+    parent: String,
     /// Useful data itself
     ///
     payload: Vec<u8>,
@@ -67,5 +79,5 @@ pub struct Attachment {
     /// `current_sk` is used for signing from holding `Iml`.
     ///
     #[serde(skip_serializing_if = "Option::is_none")]
-    proof: Option<[u8; 32]>,
+    proof: Option<Vec<u8>>,
 }

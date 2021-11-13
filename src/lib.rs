@@ -5,7 +5,7 @@ mod processor;
 pub use getters::*;
 pub use packer::*;
 pub use processor::*;
-/// Inverted Microledger
+/// Inversed Microledger
 ///
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Iml {

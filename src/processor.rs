@@ -10,7 +10,7 @@ impl Iml {
                     return false;
                 }
                 let previous_sk = previous.get_next_sk();
-                if previous_sk == self.get_current_dh() {
+                if previous_sk == self.get_current_sk() {
                     if verify_sig(&self) {
                         previous.verify()
                     } else {
@@ -21,7 +21,8 @@ impl Iml {
                 }
             }
             None => {
-                if blake3::hash(&self.current_sk).to_string() == self.id && verify_sig(&self) {
+                if blake3::hash(&self.current_sk).to_string() == self.get_id() && verify_sig(&self)
+                {
                     true
                 } else {
                     false

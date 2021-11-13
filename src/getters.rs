@@ -10,11 +10,19 @@ impl Iml {
     pub fn get_next_sk(&self) -> &[u8] {
         &self.next_sk
     }
-    pub fn get_current_dh(&self) -> &[u8] {
-        &self.current_dh
+    pub fn get_interacion_key(&self) -> Option<Vec<u8>> {
+        self.interaction_key.clone()
     }
-    pub fn get_next_dh(&self) -> &[u8] {
-        &self.next_dh
+    // TODO: make it Result and error if cannot reach id
+    pub fn get_id(&self) -> String {
+        if self.get_civilization() == 0 {
+            self.id.clone().unwrap_or_default()
+        } else {
+            match self.previous() {
+                Some(previous) => previous.get_id(),
+                None => String::default(),
+            }
+        }
     }
     pub fn previous(&self) -> Option<Iml> {
         if self.inversion.is_empty() {

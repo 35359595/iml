@@ -11,7 +11,8 @@ pub use processor::*;
 pub struct Iml {
     /// Blake 3 hash of current_sk, next_sk, current_dh, next_dh joined
     ///
-    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     /// Indicates "age" of identifier.
     /// Is incremented on each evolution.
     /// Used to detect possible degradation on verification.
@@ -23,12 +24,10 @@ pub struct Iml {
     /// Next ECDSA signing public key
     ///
     next_sk: Vec<u8>,
-    /// Current DH agreement public key
+    /// Current interaction DH agreement public key
     ///
-    current_dh: Vec<u8>,
-    /// Next DH agreement public key
-    ///
-    next_dh: Vec<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    interaction_key: Option<Vec<u8>>,
     /// Any usefull payload.
     /// Is not included into verification of Iml, but
     ///  has proof of it's own internally, therefore

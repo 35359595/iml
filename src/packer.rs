@@ -66,8 +66,8 @@ impl Iml {
         }
         evolved.inversion = serde_cbor::to_vec(&self).unwrap();
         let proof = wallet
-            .sign_raw(
-                &format!("{}_current_sk", &self.get_id()),
+            .sign_raw_by_controller(
+                &format!("{}_sk_{}", &self.get_id(), evolved.get_civilization()),
                 &evolved.as_verifiable(),
             )
             .unwrap();

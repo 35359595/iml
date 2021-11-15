@@ -2,7 +2,7 @@
 
 ## Abstract
 
-IML (Inverted Microledger) is a variant of (Decentralized identifiers)[https://www.w3.org/TR/did-core/#dfn-decentralized-identifiers] and [DID Method](https://www.w3.org/TR/did-core/#dfn-did-methods) designed to provide highest level of security and privacy.
+IML (Inverted Microledger) is a variant of [Decentralized identifiers](https://www.w3.org/TR/did-core/#dfn-decentralized-identifiers) and [DID Method](https://www.w3.org/TR/did-core/#dfn-did-methods) designed to provide highest level of security and privacy.
 This document is and should be interpreted as DI/DID specifications until stated otherwise.
 
 ## Status
@@ -34,12 +34,12 @@ However, doing so, method may impend some extra resource costs - additional cryp
 
 ### 1.2 Cryptographical algorithms
 
-IML uses (ECDSA/P256)[https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm] signatures for both `Iml` and `Attachment` `proof` generation.
+IML uses [ECDSA/P256](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) signatures for both `Iml` and `Attachment` `proof` generation.
 For interactions `Iml` is encrypted using ephemeral Diffie-Hellman key exchanges with the secp256k1 elliptic curve.
 
 ### 1.3 IML Data Model
 
-IML has main object named `Iml`, which is serializable. IML supperts (CBOR)[https://www.rfc-editor.org/rfc/rfc8949.html] serialization ONLY.
+IML has main object named `Iml`, which is serializable. IML supperts [CBOR](https://www.rfc-editor.org/rfc/rfc8949.html) serialization ONLY.
 This is due to a fact that all properties are sets of raw bytes or guarranteed UTF-8 strings. In addition, during interaction, entire inner Iml of the envelope is deflated using DEFLATE algorithm to minimize data transfered over network.
 
 IML uses recursion to provide consistent, uninterrupted chain of events, which is easy to parse and verify. Recursive property of `Iml` structure is named `inversion` and is OPTIONAL set of bytes produced from serializing previous Iml state.

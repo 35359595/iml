@@ -11,3 +11,6 @@ universal_wallet = { git = "https://github.com/jolocom/wallet-rs/", branch = "si
 blake3 = "1.2.0"
 p256 = { version = "0.9.0", features = [ "ecdsa" ] }
 ecdsa = "0.12"
+base64-url = "*"
+libflate = "1"
+

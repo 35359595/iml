@@ -25,11 +25,9 @@ impl Iml {
         }
     }
     pub fn previous(&self) -> Option<Iml> {
-        if self.inversion.is_empty() {
-            None
-        } else {
-            serde_cbor::from_slice(&self.inversion).unwrap()
-        }
+        self.inversion
+            .clone()
+            .and_then(|previous| Some(serde_cbor::from_slice(&previous).unwrap()))
     }
     pub fn proof(&self) -> Vec<u8> {
         match self.proof.clone() {
@@ -47,6 +45,7 @@ impl Iml {
         let verifiable = Iml {
             attachments: None,
             proof: None,
+            inversion: None,
             ..self.clone()
         };
         serde_cbor::to_vec(&verifiable).unwrap()

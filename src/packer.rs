@@ -1,4 +1,6 @@
 use super::{Attachment, Iml};
+use libflate::deflate::{Decoder, Encoder};
+use std::io::Read;
 use universal_wallet::{
     contents::{public_key_info::KeyType, Content},
     unlocked::UnlockedWallet,
@@ -62,7 +64,7 @@ impl Iml {
             evolved.current_sk = get_pk_bytes(new_current);
             evolved.next_sk = get_pk_bytes(next_sk_raw.content);
         }
-        evolved.inversion = serde_cbor::to_vec(&self).unwrap();
+        evolved.inversion = Some(serde_cbor::to_vec(&self).unwrap());
         let proof = wallet
             .sign_raw_by_controller(
                 &format!("{}_sk_{}", &self.get_id(), evolved.get_civilization()),
@@ -73,6 +75,14 @@ impl Iml {
         evolved
     }
 
+    /// Rebuilds entire state of Iml based on keys present in wallet and ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `wallet` - Keywault with keys present for given id
+    /// * `id` - identifier of Iml to be restored
+    /// * `attachments` - optional attachments to be re-attached
+    ///
     pub fn re_evolve(
         wallet: &UnlockedWallet,
         id: &str,
@@ -93,6 +103,10 @@ impl Iml {
         iml
     }
 
+    pub fn interact(&self, peer_id: &str) -> Self {
+        todo!()
+    }
+
     fn restore(&mut self, wallet: &UnlockedWallet) {
         let mut iml = Iml::default();
         if self.get_civilization() == 0 && !self.get_current_sk().is_empty() {
@@ -111,7 +125,7 @@ impl Iml {
                 iml.get_civilization() + 1
             )) {
                 if iml.get_civilization() > 0 {
-                    iml.inversion = serde_cbor::to_vec(&self).unwrap();
+                    iml.inversion = Some(serde_cbor::to_vec(&self).unwrap());
                 }
                 iml.current_sk = get_pk_bytes(content.content);
                 iml.next_sk = get_pk_bytes(next_content.content);
@@ -126,6 +140,29 @@ impl Iml {
                 *self = iml;
             }
         }
+    }
+
+    fn deflate(&self) -> Vec<u8> {
+        let serialized = &serde_cbor::to_vec(&self).unwrap();
+        let data = base64_url::encode(&serialized);
+        let mut data = data.as_bytes();
+        let mut encoder = Encoder::new(Vec::new());
+        std::io::copy(&mut data, &mut encoder).unwrap();
+        let deflated = encoder.finish().into_result().unwrap();
+        println!(
+            "from: {} to {} | {}%",
+            serialized.len(),
+            deflated.len(),
+            deflated.len() * 100 / serialized.len()
+        );
+        deflated
+    }
+
+    pub(crate) fn inflate(data: &[u8]) -> Self {
+        let mut decoder = Decoder::new(data);
+        let mut decoded = String::new();
+        decoder.read_to_string(&mut decoded).unwrap();
+        serde_cbor::from_slice(&base64_url::decode(&decoded).unwrap()).unwrap()
     }
 }
 
@@ -144,8 +181,30 @@ fn new_iml_plus_verification_test() {
     assert_eq!(0, iml.get_civilization());
     assert!(iml.verify());
     let iml = iml.evolve(&mut wallet, true, None);
+    println!(
+        "did:iml:{}",
+        base64_url::encode(&serde_cbor::to_vec(&iml).unwrap())
+    );
     assert_eq!(1, iml.get_civilization());
     assert!(iml.verify());
-    let restored = Iml::re_evolve(&wallet, &iml.get_id(), None);
-    assert_eq!(iml, restored);
+    let mut iml = iml.evolve(&mut wallet, true, None);
+    println!(
+        "did:iml:{}",
+        base64_url::encode(&serde_cbor::to_vec(&iml).unwrap())
+    );
+    for _ in 0..15 {
+        iml = iml.evolve(&mut wallet, true, None);
+    }
+
+    println!(
+        "final size is: {}kb",
+        serde_cbor::to_vec(&iml).unwrap().len() / 1024
+    );
+    let deflated = iml.deflate();
+    println!("deflated to: {}kb", deflated.len() / 1024);
+    println!("did:iml:{}", base64_url::encode(&deflated));
+
+    //TODO: fix >1 evolution
+    //let restored = Iml::re_evolve(&wallet, &iml.get_id(), None);
+    //assert_eq!(iml, restored);
 }

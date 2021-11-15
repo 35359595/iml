@@ -57,7 +57,10 @@ pub struct Iml {
     /// our SK (pair of `current_dh`) and other partie's 'current_hd'.
     /// Empty `inversion` means inception Iml.
     ///
-    inversion: Vec<u8>,
+    /// This field is not been signed in proof generation process.
+    ///
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inversion: Option<Vec<u8>>,
     /// ECDSA signature of rest of the Iml this proof and attachments excluded
     ///
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,7 +74,7 @@ pub struct Iml {
 pub struct Attachment {
     /// `proof` of parent Iml
     ///
-    parent: String,
+    parent: u64,
     /// Useful data itself
     ///
     payload: Vec<u8>,

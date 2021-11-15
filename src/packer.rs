@@ -17,7 +17,6 @@ impl Iml {
         let id = blake3::hash(&current_sk).to_string();
         wallet.set_key_controller(&current_sk_raw.id, &format!("{}_sk_0", &id));
         let next_sk_controller = &format!("{}_sk_1", &id);
-        println!("{}", &next_sk_controller);
         wallet.set_key_controller(&next_sk_raw.id, next_sk_controller);
         let mut pre_signed = Iml {
             id: Some(id),
@@ -46,7 +45,6 @@ impl Iml {
         if evolve_sk {
             let current_controller =
                 format!("{}_sk_{}", &self.get_id(), evolved.get_civilization());
-            println!("{}", &current_controller);
             let new_current = wallet
                 .get_content_by_controller(&current_controller)
                 .unwrap()
@@ -74,6 +72,61 @@ impl Iml {
         evolved.proof = Some(proof);
         evolved
     }
+
+    pub fn re_evolve(
+        wallet: &UnlockedWallet,
+        id: &str,
+        _attachments: Option<Vec<Attachment>>,
+    ) -> Self {
+        // TODO: re-attach attachments
+        let mut iml = Iml::default();
+        iml.id = Some(id.into());
+        loop {
+            iml.restore(wallet);
+            if wallet
+                .get_key_by_controller(&format!("{}_sk_{}", id, iml.get_civilization() + 2))
+                .is_none()
+            {
+                break;
+            }
+        }
+        iml
+    }
+
+    fn restore(&mut self, wallet: &UnlockedWallet) {
+        let mut iml = Iml::default();
+        if self.get_civilization() == 0 && !self.get_current_sk().is_empty() {
+            iml.civilization = self.get_civilization() + 1;
+        } else {
+            iml.id = self.id.clone()
+        }
+        if let Some(content) = wallet.get_key_by_controller(&format!(
+            "{}_sk_{}",
+            &self.get_id(),
+            iml.get_civilization()
+        )) {
+            if let Some(next_content) = wallet.get_key_by_controller(&format!(
+                "{}_sk_{}",
+                &self.get_id(),
+                iml.get_civilization() + 1
+            )) {
+                if iml.get_civilization() > 0 {
+                    iml.inversion = serde_cbor::to_vec(&self).unwrap();
+                }
+                iml.current_sk = get_pk_bytes(content.content);
+                iml.next_sk = get_pk_bytes(next_content.content);
+                iml.proof = Some(
+                    wallet
+                        .sign_raw_by_controller(
+                            &format!("{}_sk_{}", &self.get_id(), iml.get_civilization()),
+                            &iml.as_verifiable(),
+                        )
+                        .unwrap(),
+                );
+                *self = iml;
+            }
+        }
+    }
 }
 
 fn get_pk_bytes(c: Content) -> Vec<u8> {
@@ -93,4 +146,6 @@ fn new_iml_plus_verification_test() {
     let iml = iml.evolve(&mut wallet, true, None);
     assert_eq!(1, iml.get_civilization());
     assert!(iml.verify());
+    let restored = Iml::re_evolve(&wallet, &iml.get_id(), None);
+    assert_eq!(iml, restored);
 }

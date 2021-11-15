@@ -7,9 +7,14 @@ pub use packer::*;
 pub use processor::*;
 /// Inversed Microledger
 ///
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Iml {
-    /// Blake 3 hash of current_sk, next_sk, current_dh, next_dh joined
+    /// Blake 3 hash of first sk of the identifier.
+    /// Never attached to higher level Imls.
+    /// Can be resolved only if full Iml recoursion is parsable.
+    ///
+    /// Additionally used during interaction on public Iml to identify
+    ///  recepient's Public key for KeyAgreement.
     ///
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -25,6 +30,8 @@ pub struct Iml {
     ///
     next_sk: Vec<u8>,
     /// Current interaction DH agreement public key
+    /// If this property is present - `id` pionts out
+    ///  which key to use to generate shared secret.
     ///
     #[serde(skip_serializing_if = "Option::is_none")]
     interaction_key: Option<Vec<u8>>,
@@ -60,7 +67,7 @@ pub struct Iml {
 /// Attachment structure.
 /// Can be any payload.
 ///
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Attachment {
     /// `proof` of parent Iml
     ///
@@ -71,7 +78,11 @@ pub struct Attachment {
     /// Protocol specific type specifier.
     /// Defined per application.
     ///
-    payload_type: Vec<u8>,
+    /// Reserved values are:
+    /// "https://www.w3.org/TR/did-core/" - indicates `did:iml` method's resolution payload.
+    /// All IANA registered official mime media types: https://www.iana.org/assignments/media-types/media-types.xhtml
+    ///
+    payload_type: String,
     /// ECDSA signature of rest of the Attachment.
     /// This proof is excluded from signature generation
     ///  and should not be included for correct verification.

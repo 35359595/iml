@@ -9,10 +9,6 @@ This document is and should be interpreted as DI/DID specifications until stated
 
 Both specifications and reference implementation (also part of this repository) are in draft state. Version of the draft is equal to crate version specified in Cargo.toml file.
 
-## Copyright notice
-
-Copyright (2021) Ivan Temchenko - until donated to proper governing foundation.
-
 ## 1. Introduction
 
 There are dozens of Decentralized identifiers and DID methods defined already, but there are multiple issues with regards to different requirements associated with those.

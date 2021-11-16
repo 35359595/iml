@@ -86,7 +86,13 @@ As last step - `proof` is generated via signing `Iml` itself after serializing i
 
 ### 2.2 Evolution
 
-There are three types of Identifier evolution.
+There are three types of Identifier evolution: Key evolution, Attachment evolution and Hybrid evolution.
+As evolution is based on keys and attachments only - there is NO DIRECT NEED to store `Iml` as a file or DB entry. It can, and when possible - should, be re-evolved from Key Vault only.
+Each evolution key SHOLD be tagged with `$IDENTIFIER_sk_$EVOLUTION` in the Key Vault, allowing implementation to easily collect Verifying keys per each evolution and construct key evolved `Iml`.
+Re-evolving function should also take OPTIONAL set of `Attachment`s, verify their correctnest agains corresponding `parent` evolution and re-insert them, reconstructing full `Iml`.
+Most attachments can be stored in their raw format in files with `.imla` (Inverted microledger attachment) extension, however, those which include Identifier related information SHOULD be stored
+in encrypted format or on the secure storage, which is beyond this specification and can be determined by higher level application.
+Storing `Iml` in file or database is allowed, aspecially on systems with limited hardware resources, but above security considerations apply.
 
 #### 2.2.1 Key evolution
 

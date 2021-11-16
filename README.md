@@ -104,11 +104,11 @@ Last step is to sign serialized and result of serialization should be signed by 
 Whenever there is a need to attach some data to be cryptographically bound to Identifier - it is done through Attachment evolution.
 
 Prior to start the evolution, Attachment[s] should be created. Their `parent` field should be set to current `Iml` `civilization` increased by 1.
-Next new `Iml` is created, it's `proof_of_attachments` set to signature of serialized set of `Attachment`s using `current_sk' (from previous non-empty `Iml`) key pair's Signing Key.
+Next new `Iml` is created, it's `proof_of_attachments` set to signature of serialized set of `Attachment`s using `current_sk` (from previous non-empty `Iml`) key pair's Signing Key.
 New `Iml`s `civilization` is set to previous value increased by 1.
 `current_sk` and `next_sk` properties should be empty signalling that key from previous nearest non-empty `Iml` should be used.
 Previous `Iml` serialized and set as `inversion` value. 
-Using previous, valid 'current_sk` new `Iml`s serialized data is signed and set as `proof` field value.
+Using previous, valid `current_sk` new `Iml`s serialized data is signed and set as `proof` field value.
 
 ### 2.2.3 Hybrid evolution
 

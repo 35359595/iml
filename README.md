@@ -200,6 +200,13 @@ Note: Pre-compressed, serialized `Iml`s may get quite big, but after compression
 This is still producing DID URLs of significant length (from 16kb of civilization 0 to 140kb for civilization 10 with key evolutions). Considering all the benefits - such
 size is not relevant, however deflation and `Iml` size decrease proposals are highly welcome at this stage.
 
+### 4.2 DID Document attaching, updating and resolution
+
+TBD
+
+### `did:iml` and DIDComm v2
+
+TBD
 
 # License
 

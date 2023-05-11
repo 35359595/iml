@@ -1,25 +1,17 @@
-use super::{Attachment, Iml};
+use super::{kv::UnlockedVault, Attachment, Iml};
 use libflate::deflate::{Decoder, Encoder};
 use std::io::Read;
-use universal_wallet::{
-    contents::{public_key_info::KeyType, Content},
-    unlocked::UnlockedWallet,
-};
 
 impl Iml {
-    pub fn new(wallet: &mut UnlockedWallet) -> Self {
-        let current_sk_raw = wallet
-            .new_key(KeyType::EcdsaSecp256k1VerificationKey2019, None)
-            .unwrap();
-        let next_sk_raw = wallet
-            .new_key(KeyType::EcdsaSecp256k1VerificationKey2019, None)
-            .unwrap();
+    pub fn new(wallet: &mut UnlockedVault) -> Self {
+        let current_sk_raw = wallet.new().unwrap();
+        let next_sk_raw = wallet.new().unwrap();
         let current_sk = get_pk_bytes(current_sk_raw.content);
         let next_sk = get_pk_bytes(next_sk_raw.content);
         let id = blake3::hash(&current_sk).to_string();
-        wallet.set_key_controller(&current_sk_raw.id, &format!("{}_sk_0", &id));
+        wallet.set_key_id(&current_sk_raw.id, &format!("{}_sk_0", &id));
         let next_sk_controller = &format!("{}_sk_1", &id);
-        wallet.set_key_controller(&next_sk_raw.id, next_sk_controller);
+        wallet.set_key_id(&next_sk_raw.id, next_sk_controller);
         let mut pre_signed = Iml {
             id: Some(id),
             current_sk,
@@ -27,7 +19,7 @@ impl Iml {
             ..Iml::default()
         };
         let sig = wallet
-            .sign_raw(&current_sk_raw.id, &pre_signed.as_verifiable())
+            .sign(&current_sk_raw.id, &pre_signed.as_verifiable())
             .unwrap();
         pre_signed.proof = Some(sig);
         pre_signed
@@ -35,7 +27,7 @@ impl Iml {
 
     pub fn evolve(
         self,
-        wallet: &mut UnlockedWallet,
+        wallet: &mut UnlockedVault,
         evolve_sk: bool,
         attachments: Option<Vec<Attachment>>,
     ) -> Self {
@@ -48,25 +40,16 @@ impl Iml {
             let current_controller =
                 format!("{}_sk_{}", &self.get_id(), evolved.get_civilization());
             let new_current = wallet
-                .get_content_by_controller(&current_controller)
+                .get_content_by_id(&current_controller)
                 .unwrap()
                 .clone();
-            let next_sk_raw = wallet
-                .new_key(
-                    KeyType::EcdsaSecp256k1VerificationKey2019,
-                    Some(vec![format!(
-                        "{}_sk_{}",
-                        &self.get_id(),
-                        evolved.get_civilization() + 1
-                    )]),
-                )
-                .unwrap();
+            let next_sk_raw = wallet.new_key().unwrap();
             evolved.current_sk = get_pk_bytes(new_current);
             evolved.next_sk = get_pk_bytes(next_sk_raw.content);
         }
         evolved.inversion = Some(serde_cbor::to_vec(&self).unwrap());
         let proof = wallet
-            .sign_raw_by_controller(
+            .sign_raw_by_id(
                 &format!("{}_sk_{}", &self.get_id(), evolved.get_civilization()),
                 &evolved.as_verifiable(),
             )
@@ -84,7 +67,7 @@ impl Iml {
     /// * `attachments` - optional attachments to be re-attached
     ///
     pub fn re_evolve(
-        wallet: &UnlockedWallet,
+        wallet: &UnlockedVault,
         id: &str,
         _attachments: Option<Vec<Attachment>>,
     ) -> Self {
@@ -94,7 +77,7 @@ impl Iml {
         loop {
             iml.restore(wallet);
             if wallet
-                .get_key_by_controller(&format!("{}_sk_{}", id, iml.get_civilization() + 2))
+                .get_key_by_id(&format!("{}_sk_{}", id, iml.get_civilization() + 2))
                 .is_none()
             {
                 break;
@@ -107,19 +90,17 @@ impl Iml {
         todo!()
     }
 
-    fn restore(&mut self, wallet: &UnlockedWallet) {
+    fn restore(&mut self, wallet: &UnlockedVault) {
         let mut iml = Iml::default();
         if self.get_civilization() == 0 && !self.get_current_sk().is_empty() {
             iml.civilization = self.get_civilization() + 1;
         } else {
             iml.id = self.id.clone()
         }
-        if let Some(content) = wallet.get_key_by_controller(&format!(
-            "{}_sk_{}",
-            &self.get_id(),
-            iml.get_civilization()
-        )) {
-            if let Some(next_content) = wallet.get_key_by_controller(&format!(
+        if let Some(content) =
+            wallet.get_key_by_id(&format!("{}_sk_{}", &self.get_id(), iml.get_civilization()))
+        {
+            if let Some(next_content) = wallet.get_key_by_id(&format!(
                 "{}_sk_{}",
                 &self.get_id(),
                 iml.get_civilization() + 1
@@ -131,7 +112,7 @@ impl Iml {
                 iml.next_sk = get_pk_bytes(next_content.content);
                 iml.proof = Some(
                     wallet
-                        .sign_raw_by_controller(
+                        .sign_raw_by_id(
                             &format!("{}_sk_{}", &self.get_id(), iml.get_civilization()),
                             &iml.as_verifiable(),
                         )
@@ -166,17 +147,9 @@ impl Iml {
     }
 }
 
-fn get_pk_bytes(c: Content) -> Vec<u8> {
-    match c {
-        Content::PublicKey(pk) => pk.public_key,
-        Content::KeyPair(kp) => kp.public_key.public_key,
-        _ => vec![],
-    }
-}
-
 #[test]
 fn new_iml_plus_verification_test() {
-    let mut wallet = UnlockedWallet::new("test");
+    let mut wallet = UnlockedVault::new();
     let iml = Iml::new(&mut wallet);
     assert_eq!(0, iml.get_civilization());
     assert!(iml.verify());

@@ -1,19 +1,11 @@
-use super::{Attachment, Iml};
+use super::{Attachment, Iml, KeyType, UnlockedWallet};
 use libflate::deflate::{Decoder, Encoder};
 use std::io::Read;
-use universal_wallet::{
-    contents::{public_key_info::KeyType, Content},
-    unlocked::UnlockedWallet,
-};
 
 impl Iml {
     pub fn new(wallet: &mut UnlockedWallet) -> Self {
-        let current_sk_raw = wallet
-            .new_key(KeyType::EcdsaSecp256k1VerificationKey2019, None)
-            .unwrap();
-        let next_sk_raw = wallet
-            .new_key(KeyType::EcdsaSecp256k1VerificationKey2019, None)
-            .unwrap();
+        let current_sk_raw = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
+        let next_sk_raw = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
         let current_sk = get_pk_bytes(current_sk_raw.content);
         let next_sk = get_pk_bytes(next_sk_raw.content);
         let id = blake3::hash(&current_sk).to_string();
@@ -53,7 +45,7 @@ impl Iml {
                 .clone();
             let next_sk_raw = wallet
                 .new_key(
-                    KeyType::EcdsaSecp256k1VerificationKey2019,
+                    KeyType::Ed25519_256,
                     Some(vec![format!(
                         "{}_sk_{}",
                         &self.get_id(),

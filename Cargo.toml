@@ -1,16 +1,19 @@
 [package]
 name = "iml"
 version = "0.1.0"
+authors = ["Ivan Temchenko <[ivan.vb030@simplelogin.com]>"]
+description = "Inverted Microledger substrate contract"
+license = "Licensed under the EUPL-1.2-or-later"
 edition = "2021"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
-k256 = { version = "0.9", features = [ "ecdsa" ] }
-universal_wallet = { git = "https://github.com/jolocom/wallet-rs/", branch = "sig_fixes" }
+k256 = { version = "^0.13", features = [ "ecdsa", "serde" ] }
 blake3 = "1.2.0"
 p256 = { version = "0.9.0", features = [ "ecdsa" ] }
 ecdsa = "0.12"
 base64-url = "*"
 libflate = "1"
+zeroize = "*"
 

@@ -1,10 +1,13 @@
 use serde::{Deserialize, Serialize};
+pub mod error;
 mod getters;
 mod packer;
 mod processor;
+mod wallet;
 pub use getters::*;
 pub use packer::*;
 pub use processor::*;
+pub(crate) use wallet::*;
 /// Inverted Microledger
 ///
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]

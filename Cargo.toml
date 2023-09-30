@@ -16,4 +16,5 @@ ecdsa = "0.12"
 base64-url = "*"
 libflate = "1"
 zeroize = "*"
+arrayref = "^0.3"
 

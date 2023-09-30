@@ -4,13 +4,55 @@ use k256::ecdsa::{
     signature::{Signer, Verifier},
     Signature, SigningKey, VerifyingKey,
 };
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeSeq, Deserialize, Serialize};
 use std::collections::HashMap;
 use zeroize::Zeroize;
 
-#[derive(Deserialize, Serialize)]
 pub(crate) struct UnlockedWallet {
+    // TODO: fix this vec ugliness
     keys: HashMap<KeyId, SigningKey>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct KeysEntry {
+    id: KeyId,
+    sk: [u8; 32],
+}
+
+impl From<(KeyId, SigningKey)> for KeysEntry {
+    fn from(tuple: (KeyId, SigningKey)) -> Self {
+        Self {
+            id: tuple.0,
+            sk: tuple.1.to_bytes().into(),
+        }
+    }
+}
+
+impl Serialize for UnlockedWallet {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.keys.len()))?;
+        self.keys
+            .into_iter()
+            .try_for_each(|e| seq.serialize_element(&KeysEntry::from(e)))?;
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for UnlockedWallet {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            keys: Vec::<KeysEntry>::deserialize(deserializer)?
+                .into_iter()
+                .map(|kv| (kv.id, SigningKey::from_bytes(&kv.sk.into()).unwrap()))
+                .collect(),
+        })
+    }
 }
 
 impl UnlockedWallet {

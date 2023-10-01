@@ -4,58 +4,34 @@ use k256::ecdsa::{
     signature::{Signer, Verifier},
     Signature, SigningKey, VerifyingKey,
 };
+use rand::rngs::OsRng;
 use serde::{ser::SerializeSeq, Deserialize, Serialize};
 use std::collections::HashMap;
 use zeroize::Zeroize;
 
+#[derive(PartialEq, Eq)]
+#[cfg_attr(test, derive(Debug))]
 pub(crate) struct UnlockedWallet {
     // TODO: fix this vec ugliness
     keys: HashMap<KeyId, SigningKey>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct KeysEntry {
-    id: KeyId,
-    sk: [u8; 32],
-}
-
-impl From<(KeyId, SigningKey)> for KeysEntry {
-    fn from(tuple: (KeyId, SigningKey)) -> Self {
+impl UnlockedWallet {
+    pub fn new() -> Self {
         Self {
-            id: tuple.0,
-            sk: tuple.1.to_bytes().into(),
+            keys: HashMap::new(),
         }
     }
-}
 
-impl Serialize for UnlockedWallet {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(self.keys.len()))?;
-        self.keys
-            .into_iter()
-            .try_for_each(|e| seq.serialize_element(&KeysEntry::from(e)))?;
-        seq.end()
+    pub fn new_key_for(&mut self, id: KeyId) -> Result<(), Error> {
+        if let Some(_) = self.keys.get(&id) {
+            Err(Error::KeyExistsForId)
+        } else {
+            self.keys.insert(id, SigningKey::random(&mut OsRng {}));
+            Ok(())
+        }
     }
-}
 
-impl<'de> Deserialize<'de> for UnlockedWallet {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(Self {
-            keys: Vec::<KeysEntry>::deserialize(deserializer)?
-                .into_iter()
-                .map(|kv| (kv.id, SigningKey::from_bytes(&kv.sk.into()).unwrap()))
-                .collect(),
-        })
-    }
-}
-
-impl UnlockedWallet {
     pub fn public_for(&self, id: &KeyId) -> Option<VerifyingKey> {
         Some(self.keys.get(id)?.verifying_key().to_owned())
     }
@@ -126,4 +102,46 @@ fn hasher_test() {
     assert_ne!(key_id_generate("abc"), [0u8; 4]);
     assert_ne!(key_id_generate(br#"abcd"#), [0u8; 4]);
     assert_ne!(key_id_generate([1u8; 64]), [0u8; 4]);
+}
+
+#[derive(Serialize, Deserialize)]
+struct KeysEntry {
+    id: KeyId,
+    sk: [u8; 32],
+}
+
+impl From<(KeyId, SigningKey)> for KeysEntry {
+    fn from(tuple: (KeyId, SigningKey)) -> Self {
+        Self {
+            id: tuple.0,
+            sk: tuple.1.to_bytes().into(),
+        }
+    }
+}
+
+impl Serialize for UnlockedWallet {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.keys.len()))?;
+        self.keys
+            .into_iter()
+            .try_for_each(|e| seq.serialize_element(&KeysEntry::from(e)))?;
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for UnlockedWallet {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            keys: Vec::<KeysEntry>::deserialize(deserializer)?
+                .into_iter()
+                .map(|kv| (kv.id, SigningKey::from_bytes(&kv.sk.into()).unwrap()))
+                .collect(),
+        })
+    }
 }

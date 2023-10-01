@@ -17,4 +17,6 @@ base64-url = "*"
 libflate = "1"
 zeroize = "*"
 arrayref = "^0.3"
+rand = "^0.8"
+thiserror = "^1"
 

@@ -151,7 +151,9 @@ impl Serialize for UnlockedWallet {
         S: serde::Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(self.keys.len()))?;
+        // FIXME: remove this clone and make sure it's properly zeroized
         self.keys
+            .clone()
             .into_iter()
             .try_for_each(|e| seq.serialize_element(&KeysEntry::from(e)))?;
         seq.end()

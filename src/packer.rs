@@ -87,7 +87,10 @@ impl Iml {
         loop {
             iml.restore(wallet);
             if wallet
-                .get_key_by_controller(&format!("{}_sk_{}", id, iml.get_civilization() + 2))
+                .public_for(&key_id_generate(format!(
+                    "sk_{}",
+                    iml.get_civilization() + 2
+                )))
                 .is_none()
             {
                 break;
@@ -107,28 +110,21 @@ impl Iml {
         } else {
             iml.id = self.id.clone()
         }
-        if let Some(content) = wallet.get_key_by_controller(&format!(
-            "{}_sk_{}",
-            &self.get_id(),
-            iml.get_civilization()
-        )) {
-            if let Some(next_content) = wallet.get_key_by_controller(&format!(
-                "{}_sk_{}",
-                &self.get_id(),
-                iml.get_civilization() + 1
-            )) {
+        if let Some(current) =
+            wallet.public_for(&key_id_generate(format!("sk_{}", iml.get_civilization())))
+        {
+            let next_id = key_id_generate(format!("sk_{}", iml.get_civilization() + 1));
+            if let Some(next) = wallet.public_for(&next_id) {
                 if iml.get_civilization() > 0 {
                     iml.inversion = Some(serde_cbor::to_vec(&self).unwrap());
                 }
-                iml.current_sk = get_pk_bytes(content.content);
-                iml.next_sk = get_pk_bytes(next_content.content);
+                iml.current_sk = current.to_sec1_bytes().into_vec();
+                iml.next_sk = next.to_sec1_bytes().into_vec();
                 iml.proof = Some(
                     wallet
-                        .sign_raw_by_controller(
-                            &format!("{}_sk_{}", &self.get_id(), iml.get_civilization()),
-                            &iml.as_verifiable(),
-                        )
-                        .unwrap(),
+                        .sign_with(&iml.as_verifiable(), &next_id)
+                        .unwrap()
+                        .to_vec(),
                 );
                 *self = iml;
             }
@@ -161,7 +157,7 @@ impl Iml {
 
 #[test]
 fn new_iml_plus_verification_test() {
-    let mut wallet = UnlockedWallet::new("test");
+    let mut wallet = UnlockedWallet::new();
     let iml = Iml::new(&mut wallet);
     assert_eq!(0, iml.get_civilization());
     assert!(iml.verify());

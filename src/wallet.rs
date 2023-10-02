@@ -23,6 +23,22 @@ impl UnlockedWallet {
         }
     }
 
+    pub fn new_key(&mut self, key_type: KeyType, id: Option<KeyId>) -> Result<KeyId, Error> {
+        match key_type {
+            KeyType::Ed25519_256 => {
+                let new_key = SigningKey::random(&mut OsRng {});
+                let id = if let Some(id) = id {
+                    id
+                } else {
+                    key_id_generate(new_key.verifying_key().to_sec1_bytes())
+                };
+                self.keys.insert(id, new_key);
+                Ok(id)
+            }
+            _ => Err(Error::UnsupportedKeyType),
+        }
+    }
+
     pub fn new_key_for(&mut self, id: KeyId) -> Result<(), Error> {
         if let Some(_) = self.keys.get(&id) {
             Err(Error::KeyExistsForId)

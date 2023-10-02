@@ -9,6 +9,8 @@ pub enum Error {
     EcdsaFailed,
     #[error("Key was already generated for given id")]
     KeyExistsForId,
+    #[error("Key type is not supported (yet?)")]
+    UnsupportedKeyType,
 }
 
 impl From<CborError> for Error {

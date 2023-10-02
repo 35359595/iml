@@ -119,7 +119,8 @@ pub fn key_id_generate(s: impl AsRef<[u8]>) -> KeyId {
     hash(s.as_ref()).as_bytes()[..4]
         .into_iter()
         .enumerate()
-        .map(|(i, v)| r[i] = *v);
+        .map(|(i, v)| r[i] = *v)
+        .for_each(drop);
     r
 }
 

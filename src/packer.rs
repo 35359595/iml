@@ -1,3 +1,5 @@
+use crate::wallet::key_id_generate;
+
 use super::{Attachment, Iml, KeyType, UnlockedWallet};
 use libflate::deflate::{Decoder, Encoder};
 use std::io::Read;
@@ -6,13 +8,15 @@ impl Iml {
     pub fn new(wallet: &mut UnlockedWallet) -> Self {
         let current_sk_id = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
         let next_sk_id = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
+        let gen_id = key_id_generate(b"id_1");
+        wallet.move_key_for(&next_sk_id, gen_id);
         let current_sk = wallet
             .public_for(&current_sk_id)
             .unwrap()
             .to_sec1_bytes()
             .into_vec();
         let next_sk = wallet
-            .public_for(&next_sk_id)
+            .public_for(&gen_id)
             .unwrap()
             .to_sec1_bytes()
             .into_vec();
@@ -44,32 +48,23 @@ impl Iml {
         evolved.civilization = self.get_civilization() + 1;
         if evolve_sk {
             let current_controller =
-                format!("{}_sk_{}", &self.get_id(), evolved.get_civilization());
-            let new_current = wallet
-                .get_content_by_controller(&current_controller)
-                .unwrap()
-                .clone();
-            let next_sk_raw = wallet
-                .new_key(
-                    KeyType::Ed25519_256,
-                    Some(vec![format!(
-                        "{}_sk_{}",
-                        &self.get_id(),
-                        evolved.get_civilization() + 1
-                    )]),
-                )
-                .unwrap();
-            evolved.current_sk = get_pk_bytes(new_current);
-            evolved.next_sk = get_pk_bytes(next_sk_raw.content);
+                key_id_generate(format!("sk_{}", evolved.get_civilization()).into_bytes());
+            let new_current = wallet.public_for(&current_controller).unwrap().clone();
+            let next_controller =
+                key_id_generate(format!("sk_{}", evolved.get_civilization() + 1).into_bytes());
+            wallet.new_key_for(next_controller).unwrap();
+            let new_next = wallet.public_for(&next_controller).unwrap().clone();
+            evolved.current_sk = new_current.to_sec1_bytes().into_vec();
+            evolved.next_sk = new_next.to_sec1_bytes().to_vec();
         }
         evolved.inversion = Some(serde_cbor::to_vec(&self).unwrap());
         let proof = wallet
-            .sign_raw_by_controller(
-                &format!("{}_sk_{}", &self.get_id(), evolved.get_civilization()),
+            .sign_with(
                 &evolved.as_verifiable(),
+                &key_id_generate(format!("sk_{}", evolved.get_civilization())),
             )
             .unwrap();
-        evolved.proof = Some(proof);
+        evolved.proof = Some(proof.to_vec());
         evolved
     }
 

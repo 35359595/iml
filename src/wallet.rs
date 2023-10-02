@@ -48,6 +48,16 @@ impl UnlockedWallet {
         }
     }
 
+    /// Moves key from `fro_id` to `to_id`
+    pub fn move_key_for(&mut self, for_id: &KeyId, to_id: KeyId) -> Result<(), Error> {
+        if let Some(k) = self.keys.remove(for_id) {
+            self.keys.insert(to_id, k);
+            Ok(())
+        } else {
+            Err(Error::KeyNotFound)
+        }
+    }
+
     pub fn public_for(&self, id: &KeyId) -> Option<VerifyingKey> {
         Some(self.keys.get(id)?.verifying_key().to_owned())
     }

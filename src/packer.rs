@@ -4,14 +4,19 @@ use std::io::Read;
 
 impl Iml {
     pub fn new(wallet: &mut UnlockedWallet) -> Self {
-        let current_sk_raw = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
-        let next_sk_raw = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
-        let current_sk = get_pk_bytes(current_sk_raw.content);
-        let next_sk = get_pk_bytes(next_sk_raw.content);
-        let id = blake3::hash(&current_sk).to_string();
-        wallet.set_key_controller(&current_sk_raw.id, &format!("{}_sk_0", &id));
-        let next_sk_controller = &format!("{}_sk_1", &id);
-        wallet.set_key_controller(&next_sk_raw.id, next_sk_controller);
+        let current_sk_id = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
+        let next_sk_id = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
+        let current_sk = wallet
+            .public_for(&current_sk_id)
+            .unwrap()
+            .to_sec1_bytes()
+            .into_vec();
+        let next_sk = wallet
+            .public_for(&next_sk_id)
+            .unwrap()
+            .to_sec1_bytes()
+            .into_vec();
+        let id = blake3::hash(current_sk.as_ref()).to_string();
         let mut pre_signed = Iml {
             id: Some(id),
             current_sk,
@@ -19,8 +24,9 @@ impl Iml {
             ..Iml::default()
         };
         let sig = wallet
-            .sign_raw(&current_sk_raw.id, &pre_signed.as_verifiable())
-            .unwrap();
+            .sign_with(pre_signed.as_verifiable(), &current_sk_id)
+            .unwrap()
+            .to_vec();
         pre_signed.proof = Some(sig);
         pre_signed
     }
@@ -155,14 +161,6 @@ impl Iml {
         let mut decoded = String::new();
         decoder.read_to_string(&mut decoded).unwrap();
         serde_cbor::from_slice(&base64_url::decode(&decoded).unwrap()).unwrap()
-    }
-}
-
-fn get_pk_bytes(c: Content) -> Vec<u8> {
-    match c {
-        Content::PublicKey(pk) => pk.public_key,
-        Content::KeyPair(kp) => kp.public_key.public_key,
-        _ => vec![],
     }
 }
 

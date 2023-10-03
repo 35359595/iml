@@ -11,7 +11,7 @@ use zeroize::Zeroize;
 
 #[derive(PartialEq, Eq)]
 #[cfg_attr(test, derive(Debug))]
-pub(crate) struct UnlockedWallet {
+pub struct UnlockedWallet {
     // TODO: fix this vec ugliness
     keys: HashMap<KeyId, SigningKey>,
 }
@@ -23,12 +23,38 @@ impl UnlockedWallet {
         }
     }
 
+    pub fn new_key(&mut self, key_type: KeyType, id: Option<KeyId>) -> Result<KeyId, Error> {
+        match key_type {
+            KeyType::Ed25519_256 => {
+                let new_key = SigningKey::random(&mut OsRng {});
+                let id = if let Some(id) = id {
+                    id
+                } else {
+                    key_id_generate(new_key.verifying_key().to_sec1_bytes())
+                };
+                self.keys.insert(id, new_key);
+                Ok(id)
+            }
+            _ => Err(Error::UnsupportedKeyType),
+        }
+    }
+
     pub fn new_key_for(&mut self, id: KeyId) -> Result<(), Error> {
         if let Some(_) = self.keys.get(&id) {
             Err(Error::KeyExistsForId)
         } else {
             self.keys.insert(id, SigningKey::random(&mut OsRng {}));
             Ok(())
+        }
+    }
+
+    /// Moves key from `fro_id` to `to_id`
+    pub fn move_key_for(&mut self, for_id: &KeyId, to_id: KeyId) -> Result<(), Error> {
+        if let Some(k) = self.keys.remove(for_id) {
+            self.keys.insert(to_id, k);
+            Ok(())
+        } else {
+            Err(Error::KeyNotFound)
         }
     }
 
@@ -80,7 +106,7 @@ impl LockedWallet {
     }
 }
 
-pub(crate) enum KeyType {
+pub enum KeyType {
     Ed25519_256,
 }
 
@@ -93,7 +119,8 @@ pub fn key_id_generate(s: impl AsRef<[u8]>) -> KeyId {
     hash(s.as_ref()).as_bytes()[..4]
         .into_iter()
         .enumerate()
-        .map(|(i, v)| r[i] = *v);
+        .map(|(i, v)| r[i] = *v)
+        .for_each(drop);
     r
 }
 
@@ -125,7 +152,9 @@ impl Serialize for UnlockedWallet {
         S: serde::Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(self.keys.len()))?;
+        // FIXME: remove this clone and make sure it's properly zeroized
         self.keys
+            .clone()
             .into_iter()
             .try_for_each(|e| seq.serialize_element(&KeysEntry::from(e)))?;
         seq.end()

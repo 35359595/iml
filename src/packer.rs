@@ -6,17 +6,21 @@ use std::io::Read;
 
 impl Iml {
     pub fn new(wallet: &mut UnlockedWallet) -> Self {
-        let current_sk_id = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
-        let next_sk_id = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
-        let gen_id = key_id_generate(b"id_1");
-        wallet.move_key_for(&next_sk_id, gen_id);
+        let current_sk_id = key_id_generate("sk_0");
+        wallet
+            .new_key(KeyType::Ed25519_256, Some(current_sk_id))
+            .unwrap();
+        let next_sk_id = key_id_generate("sk_1");
+        wallet
+            .new_key(KeyType::Ed25519_256, Some(next_sk_id))
+            .unwrap();
         let current_sk = wallet
             .public_for(&current_sk_id)
             .unwrap()
             .to_sec1_bytes()
             .into_vec();
         let next_sk = wallet
-            .public_for(&gen_id)
+            .public_for(&next_sk_id)
             .unwrap()
             .to_sec1_bytes()
             .into_vec();
@@ -46,23 +50,23 @@ impl Iml {
         }
         let mut evolved = Iml::default();
         evolved.civilization = self.get_civilization() + 1;
+        evolved.inversion = Some(serde_cbor::to_vec(&self).unwrap());
+        // becomes current
+        let current_controller = key_id_generate(format!("sk_{}", evolved.get_civilization()));
+        // becomes next for new current
+        let next_controller =
+            key_id_generate(format!("sk_{}", evolved.get_civilization() + 1).into_bytes());
         if evolve_sk {
-            let current_controller =
-                key_id_generate(format!("sk_{}", evolved.get_civilization()).into_bytes());
-            let new_current = wallet.public_for(&current_controller).unwrap().clone();
-            let next_controller =
-                key_id_generate(format!("sk_{}", evolved.get_civilization() + 1).into_bytes());
             wallet.new_key_for(next_controller).unwrap();
             let new_next = wallet.public_for(&next_controller).unwrap().clone();
-            evolved.current_sk = new_current.to_sec1_bytes().into_vec();
+            // new next
             evolved.next_sk = new_next.to_sec1_bytes().to_vec();
+            // new current is old next
+            evolved.current_sk = self.next_sk;
         }
-        evolved.inversion = Some(serde_cbor::to_vec(&self).unwrap());
+        // new proof with new current
         let proof = wallet
-            .sign_with(
-                &evolved.as_verifiable(),
-                &key_id_generate(format!("sk_{}", evolved.get_civilization())),
-            )
+            .sign_with(&evolved.as_verifiable(), &current_controller)
             .unwrap();
         evolved.proof = Some(proof.to_vec());
         evolved
@@ -135,7 +139,7 @@ impl Iml {
         let serialized = &serde_cbor::to_vec(&self).unwrap();
         let data = base64_url::encode(&serialized);
         let mut data = data.as_bytes();
-        let mut encoder = Encoder::new(Vec::new());
+        let mut encoder = Encoder::new(Vec::with_capacity(data.len()));
         std::io::copy(&mut data, &mut encoder).unwrap();
         let deflated = encoder.finish().into_result().unwrap();
         println!(
@@ -162,10 +166,6 @@ fn new_iml_plus_verification_test() {
     assert_eq!(0, iml.get_civilization());
     assert!(iml.verify());
     let iml = iml.evolve(&mut wallet, true, None);
-    println!(
-        "did:iml:{}",
-        base64_url::encode(&serde_cbor::to_vec(&iml).unwrap())
-    );
     assert_eq!(1, iml.get_civilization());
     assert!(iml.verify());
     let mut iml = iml.evolve(&mut wallet, true, None);
@@ -181,6 +181,7 @@ fn new_iml_plus_verification_test() {
         "final size is: {}kb",
         serde_cbor::to_vec(&iml).unwrap().len() / 1024
     );
+    println!("deflating");
     let deflated = iml.deflate();
     println!("deflated to: {}kb", deflated.len() / 1024);
     println!("did:iml:{}", base64_url::encode(&deflated));

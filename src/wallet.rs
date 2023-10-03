@@ -11,7 +11,7 @@ use zeroize::Zeroize;
 
 #[derive(PartialEq, Eq)]
 #[cfg_attr(test, derive(Debug))]
-pub(crate) struct UnlockedWallet {
+pub struct UnlockedWallet {
     // TODO: fix this vec ugliness
     keys: HashMap<KeyId, SigningKey>,
 }
@@ -106,7 +106,7 @@ impl LockedWallet {
     }
 }
 
-pub(crate) enum KeyType {
+pub enum KeyType {
     Ed25519_256,
 }
 

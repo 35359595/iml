@@ -1,6 +1,5 @@
 use super::Iml;
-use ecdsa::{elliptic_curve::PublicKey, signature::Signature as S, Signature};
-use p256::ecdsa::{signature::Verifier, VerifyingKey};
+use k256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
 
 impl Iml {
     pub fn verify(&self) -> bool {
@@ -21,21 +20,18 @@ impl Iml {
                 }
             }
             None => {
-                if blake3::hash(&self.current_sk).to_string() == self.get_id() && verify_sig(&self)
-                {
-                    true
-                } else {
-                    false
-                }
+                let id = self.get_id();
+                let generated = blake3::hash(&self.current_sk).to_string();
+                id == generated && verify_sig(&self)
             }
         }
     }
 }
 
 fn verify_sig(iml: &Iml) -> bool {
-    if let Ok(vk1) = PublicKey::from_sec1_bytes(iml.get_current_sk()) {
+    if let Ok(vk1) = VerifyingKey::from_sec1_bytes(iml.get_current_sk()) {
         let vk = VerifyingKey::from(vk1);
-        if let Ok(sig) = Signature::from_bytes(&iml.proof()) {
+        if let Ok(sig) = Signature::from_slice(&iml.proof()) {
             vk.verify(&iml.as_verifiable(), &sig).is_ok()
         } else {
             false

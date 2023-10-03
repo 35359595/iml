@@ -8,6 +8,10 @@ pub use getters::*;
 pub use packer::*;
 pub use processor::*;
 pub(crate) use wallet::*;
+
+#[cfg(test)]
+mod tests;
+
 /// Inverted Microledger
 ///
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]

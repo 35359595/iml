@@ -1,17 +1,30 @@
+use crate::wallet::key_id_generate;
+
 use super::{Attachment, Iml, KeyType, UnlockedWallet};
 use libflate::deflate::{Decoder, Encoder};
 use std::io::Read;
 
 impl Iml {
     pub fn new(wallet: &mut UnlockedWallet) -> Self {
-        let current_sk_raw = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
-        let next_sk_raw = wallet.new_key(KeyType::Ed25519_256, None).unwrap();
-        let current_sk = get_pk_bytes(current_sk_raw.content);
-        let next_sk = get_pk_bytes(next_sk_raw.content);
-        let id = blake3::hash(&current_sk).to_string();
-        wallet.set_key_controller(&current_sk_raw.id, &format!("{}_sk_0", &id));
-        let next_sk_controller = &format!("{}_sk_1", &id);
-        wallet.set_key_controller(&next_sk_raw.id, next_sk_controller);
+        let current_sk_id = key_id_generate("sk_0");
+        wallet
+            .new_key(KeyType::Ed25519_256, Some(current_sk_id))
+            .unwrap();
+        let next_sk_id = key_id_generate("sk_1");
+        wallet
+            .new_key(KeyType::Ed25519_256, Some(next_sk_id))
+            .unwrap();
+        let current_sk = wallet
+            .public_for(&current_sk_id)
+            .unwrap()
+            .to_sec1_bytes()
+            .into_vec();
+        let next_sk = wallet
+            .public_for(&next_sk_id)
+            .unwrap()
+            .to_sec1_bytes()
+            .into_vec();
+        let id = blake3::hash(current_sk.as_ref()).to_string();
         let mut pre_signed = Iml {
             id: Some(id),
             current_sk,
@@ -19,8 +32,9 @@ impl Iml {
             ..Iml::default()
         };
         let sig = wallet
-            .sign_raw(&current_sk_raw.id, &pre_signed.as_verifiable())
-            .unwrap();
+            .sign_with(pre_signed.as_verifiable(), &current_sk_id)
+            .unwrap()
+            .to_vec();
         pre_signed.proof = Some(sig);
         pre_signed
     }
@@ -36,34 +50,25 @@ impl Iml {
         }
         let mut evolved = Iml::default();
         evolved.civilization = self.get_civilization() + 1;
-        if evolve_sk {
-            let current_controller =
-                format!("{}_sk_{}", &self.get_id(), evolved.get_civilization());
-            let new_current = wallet
-                .get_content_by_controller(&current_controller)
-                .unwrap()
-                .clone();
-            let next_sk_raw = wallet
-                .new_key(
-                    KeyType::Ed25519_256,
-                    Some(vec![format!(
-                        "{}_sk_{}",
-                        &self.get_id(),
-                        evolved.get_civilization() + 1
-                    )]),
-                )
-                .unwrap();
-            evolved.current_sk = get_pk_bytes(new_current);
-            evolved.next_sk = get_pk_bytes(next_sk_raw.content);
-        }
         evolved.inversion = Some(serde_cbor::to_vec(&self).unwrap());
+        // becomes current
+        let current_controller = key_id_generate(format!("sk_{}", evolved.get_civilization()));
+        // becomes next for new current
+        let next_controller =
+            key_id_generate(format!("sk_{}", evolved.get_civilization() + 1).into_bytes());
+        if evolve_sk {
+            wallet.new_key_for(next_controller).unwrap();
+            let new_next = wallet.public_for(&next_controller).unwrap().clone();
+            // new next
+            evolved.next_sk = new_next.to_sec1_bytes().to_vec();
+            // new current is old next
+            evolved.current_sk = self.next_sk;
+        }
+        // new proof with new current
         let proof = wallet
-            .sign_raw_by_controller(
-                &format!("{}_sk_{}", &self.get_id(), evolved.get_civilization()),
-                &evolved.as_verifiable(),
-            )
+            .sign_with(&evolved.as_verifiable(), &current_controller)
             .unwrap();
-        evolved.proof = Some(proof);
+        evolved.proof = Some(proof.to_vec());
         evolved
     }
 
@@ -86,7 +91,10 @@ impl Iml {
         loop {
             iml.restore(wallet);
             if wallet
-                .get_key_by_controller(&format!("{}_sk_{}", id, iml.get_civilization() + 2))
+                .public_for(&key_id_generate(format!(
+                    "sk_{}",
+                    iml.get_civilization() + 2
+                )))
                 .is_none()
             {
                 break;
@@ -106,28 +114,21 @@ impl Iml {
         } else {
             iml.id = self.id.clone()
         }
-        if let Some(content) = wallet.get_key_by_controller(&format!(
-            "{}_sk_{}",
-            &self.get_id(),
-            iml.get_civilization()
-        )) {
-            if let Some(next_content) = wallet.get_key_by_controller(&format!(
-                "{}_sk_{}",
-                &self.get_id(),
-                iml.get_civilization() + 1
-            )) {
+        if let Some(current) =
+            wallet.public_for(&key_id_generate(format!("sk_{}", iml.get_civilization())))
+        {
+            let next_id = key_id_generate(format!("sk_{}", iml.get_civilization() + 1));
+            if let Some(next) = wallet.public_for(&next_id) {
                 if iml.get_civilization() > 0 {
                     iml.inversion = Some(serde_cbor::to_vec(&self).unwrap());
                 }
-                iml.current_sk = get_pk_bytes(content.content);
-                iml.next_sk = get_pk_bytes(next_content.content);
+                iml.current_sk = current.to_sec1_bytes().into_vec();
+                iml.next_sk = next.to_sec1_bytes().into_vec();
                 iml.proof = Some(
                     wallet
-                        .sign_raw_by_controller(
-                            &format!("{}_sk_{}", &self.get_id(), iml.get_civilization()),
-                            &iml.as_verifiable(),
-                        )
-                        .unwrap(),
+                        .sign_with(&iml.as_verifiable(), &next_id)
+                        .unwrap()
+                        .to_vec(),
                 );
                 *self = iml;
             }
@@ -138,7 +139,7 @@ impl Iml {
         let serialized = &serde_cbor::to_vec(&self).unwrap();
         let data = base64_url::encode(&serialized);
         let mut data = data.as_bytes();
-        let mut encoder = Encoder::new(Vec::new());
+        let mut encoder = Encoder::new(Vec::with_capacity(data.len()));
         std::io::copy(&mut data, &mut encoder).unwrap();
         let deflated = encoder.finish().into_result().unwrap();
         println!(
@@ -158,25 +159,13 @@ impl Iml {
     }
 }
 
-fn get_pk_bytes(c: Content) -> Vec<u8> {
-    match c {
-        Content::PublicKey(pk) => pk.public_key,
-        Content::KeyPair(kp) => kp.public_key.public_key,
-        _ => vec![],
-    }
-}
-
 #[test]
 fn new_iml_plus_verification_test() {
-    let mut wallet = UnlockedWallet::new("test");
+    let mut wallet = UnlockedWallet::new();
     let iml = Iml::new(&mut wallet);
     assert_eq!(0, iml.get_civilization());
     assert!(iml.verify());
     let iml = iml.evolve(&mut wallet, true, None);
-    println!(
-        "did:iml:{}",
-        base64_url::encode(&serde_cbor::to_vec(&iml).unwrap())
-    );
     assert_eq!(1, iml.get_civilization());
     assert!(iml.verify());
     let mut iml = iml.evolve(&mut wallet, true, None);
@@ -192,6 +181,7 @@ fn new_iml_plus_verification_test() {
         "final size is: {}kb",
         serde_cbor::to_vec(&iml).unwrap().len() / 1024
     );
+    println!("deflating");
     let deflated = iml.deflate();
     println!("deflated to: {}kb", deflated.len() / 1024);
     println!("did:iml:{}", base64_url::encode(&deflated));

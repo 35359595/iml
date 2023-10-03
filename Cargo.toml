@@ -2,7 +2,7 @@
 name = "iml"
 version = "0.1.0"
 authors = ["Ivan Temchenko <[ivan.vb030@simplelogin.com]>"]
-description = "Inverted Microledger substrate contract"
+description = "Inverted Microledger"
 license = "Licensed under the EUPL-1.2-or-later"
 edition = "2021"
 
@@ -11,12 +11,9 @@ serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
 k256 = { version = "^0.13", features = [ "ecdsa", "serde" ] }
 blake3 = "1.2.0"
-p256 = { version = "0.9.0", features = [ "ecdsa" ] }
-ecdsa = "0.12"
-base64-url = "*"
-libflate = "1"
-zeroize = "*"
-arrayref = "^0.3"
+base64-url = "^2.0"
+libflate = "^2.0"
+zeroize = "^1.6"
 rand = "^0.8"
 thiserror = "^1"
 

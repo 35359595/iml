@@ -25,9 +25,7 @@ impl Iml {
         }
     }
     pub fn previous(&self) -> Option<Iml> {
-        self.inversion
-            .clone()
-            .and_then(|previous| Some(serde_cbor::from_slice(&previous).unwrap()))
+        Some(Iml::inflate(self.inversion.clone()?))
     }
     pub fn proof(&self) -> Vec<u8> {
         match self.proof.clone() {

@@ -50,7 +50,7 @@ impl Iml {
         }
         let mut evolved = Iml::default();
         evolved.civilization = self.get_civilization() + 1;
-        evolved.inversion = Some(serde_cbor::to_vec(&self).unwrap());
+        evolved.inversion = Some(self.deflate());
         // becomes current
         let current_controller = key_id_generate(format!("sk_{}", evolved.get_civilization()));
         // becomes next for new current
@@ -88,17 +88,16 @@ impl Iml {
         // TODO: re-attach attachments
         let mut iml = Iml::default();
         iml.id = Some(id.into());
-        loop {
+        while wallet
+            .public_for(&key_id_generate(format!(
+                "sk_{}",
+                iml.get_civilization() + 2
+            )))
+            .is_some()
+        {
+            println!("restoring for civilization {}", iml.get_civilization());
             iml.restore(wallet);
-            if wallet
-                .public_for(&key_id_generate(format!(
-                    "sk_{}",
-                    iml.get_civilization() + 2
-                )))
-                .is_none()
-            {
-                break;
-            }
+            iml.civilization += 1;
         }
         iml
     }
@@ -108,29 +107,27 @@ impl Iml {
     }
 
     fn restore(&mut self, wallet: &UnlockedWallet) {
-        let mut iml = Iml::default();
-        if self.get_civilization() == 0 && !self.get_current_sk().is_empty() {
-            iml.civilization = self.get_civilization() + 1;
-        } else {
-            iml.id = self.id.clone()
-        }
+        //if self.get_civilization() == 0 && !self.get_current_sk().is_empty() {
+        //    iml.civilization = self.get_civilization() + 1;
+        //} else {
+        //    iml.id = self.id.clone()
+        //}
         if let Some(current) =
-            wallet.public_for(&key_id_generate(format!("sk_{}", iml.get_civilization())))
+            wallet.public_for(&key_id_generate(format!("sk_{}", self.get_civilization())))
         {
-            let next_id = key_id_generate(format!("sk_{}", iml.get_civilization() + 1));
+            let next_id = key_id_generate(format!("sk_{}", self.get_civilization() + 1));
             if let Some(next) = wallet.public_for(&next_id) {
-                if iml.get_civilization() > 0 {
-                    iml.inversion = Some(serde_cbor::to_vec(&self).unwrap());
+                if self.get_civilization() > 0 {
+                    self.inversion = Some(self.deflate());
                 }
-                iml.current_sk = current.to_sec1_bytes().into_vec();
-                iml.next_sk = next.to_sec1_bytes().into_vec();
-                iml.proof = Some(
+                self.current_sk = current.to_sec1_bytes().into_vec();
+                self.next_sk = next.to_sec1_bytes().into_vec();
+                self.proof = Some(
                     wallet
-                        .sign_with(&iml.as_verifiable(), &next_id)
+                        .sign_with(&self.as_verifiable(), &next_id)
                         .unwrap()
                         .to_vec(),
                 );
-                *self = iml;
             }
         }
     }
@@ -151,8 +148,8 @@ impl Iml {
         deflated
     }
 
-    pub(crate) fn inflate(data: &[u8]) -> Self {
-        let mut decoder = Decoder::new(data);
+    pub(crate) fn inflate(data: impl AsRef<[u8]>) -> Self {
+        let mut decoder = Decoder::new(data.as_ref());
         let mut decoded = String::new();
         decoder.read_to_string(&mut decoded).unwrap();
         serde_cbor::from_slice(&base64_url::decode(&decoded).unwrap()).unwrap()
@@ -186,7 +183,8 @@ fn new_iml_plus_verification_test() {
     println!("deflated to: {}kb", deflated.len() / 1024);
     println!("did:iml:{}", base64_url::encode(&deflated));
 
-    //TODO: fix >1 evolution
-    //let restored = Iml::re_evolve(&wallet, &iml.get_id(), None);
+    let restored = Iml::re_evolve(&wallet, &iml.get_id(), None);
+    assert_eq!(iml.get_civilization(), restored.get_civilization());
+    // TODO: fix this assert
     //assert_eq!(iml, restored);
 }

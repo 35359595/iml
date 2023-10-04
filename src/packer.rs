@@ -1,8 +1,8 @@
-use crate::wallet::key_id_generate;
-
 use super::{Attachment, Iml, KeyType, UnlockedWallet};
+use crate::{error::Error, wallet::key_id_generate};
+use k256::ecdsa::{Signature, VerifyingKey};
 use libflate::deflate::{Decoder, Encoder};
-use std::io::Read;
+use std::{io::Read, sync::Arc};
 
 impl Iml {
     pub fn new(wallet: &mut UnlockedWallet) -> Self {
@@ -50,6 +50,7 @@ impl Iml {
         }
         let mut evolved = Iml::default();
         evolved.civilization = self.get_civilization() + 1;
+        // TODO: clean previous inversions for space saving?
         evolved.inversion = Some(self.deflate());
         // becomes current
         let current_controller = key_id_generate(format!("sk_{}", evolved.get_civilization()));
@@ -102,8 +103,29 @@ impl Iml {
         iml
     }
 
-    pub fn interact(&self, peer_id: &str) -> Self {
-        todo!()
+    pub fn interact(
+        &mut self,
+        wallet: Arc<UnlockedWallet>,
+        peer: &VerifyingKey,
+        payload: impl AsRef<[u8]>,
+        payload_type: String,
+    ) -> Result<Attachment, Error> {
+        let proof = Some(self.sign_with_current(wallet, &payload)?.to_vec());
+        Ok(Attachment {
+            parent: 0,
+            payload: payload.as_ref().to_vec(),
+            payload_type,
+            proof,
+        })
+    }
+
+    fn sign_with_current(
+        &self,
+        wallet: Arc<UnlockedWallet>,
+        payload: impl AsRef<[u8]>,
+    ) -> Result<Signature, Error> {
+        let current_id = key_id_generate(format!("sk_{}", self.civilization));
+        wallet.as_ref().sign_with(payload, &current_id)
     }
 
     fn restore(&mut self, wallet: &UnlockedWallet) {

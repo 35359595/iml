@@ -32,10 +32,12 @@ pub struct Iml {
     civilization: u64,
     /// Current ECDSA signing public key
     ///
-    current_sk: Vec<u8>,
+    current_sk: [u8; 32],
     /// Next ECDSA signing public key
     ///
-    next_sk: Vec<u8>,
+    next_sk: [u8; 32],
+    /// Diffie-Hellman public key for shared secret generation
+    ecdh: [u8; 32],
     /// Current interaction DH agreement public key
     /// If this property is present - `id` pionts out
     ///  which key to use to generate shared secret.
@@ -70,8 +72,7 @@ pub struct Iml {
     inversion: Option<Vec<u8>>,
     /// ECDSA signature of rest of the Iml this proof and attachments excluded
     ///
-    #[serde(skip_serializing_if = "Option::is_none")]
-    proof: Option<Vec<u8>>,
+    proof: [u8; 32],
 }
 
 /// Attachment structure.
@@ -80,24 +81,32 @@ pub struct Iml {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Attachment {
     /// `proof` of parent Iml
+    /// As attachments can be delivered separately from IML - we use parent's
+    /// signature as proof of origin
     ///
-    parent: u64,
-    /// Useful data itself
+    parent: [u8; 32],
+    /// Blake3 256 bit hash of data been interacted upon
     ///
-    payload: Vec<u8>,
-    /// Protocol specific type specifier.
-    /// Defined per application.
+    payload: [u8; 32],
+    /// Identifies type of the attachment
     ///
-    /// Reserved values are:
-    /// "https://www.w3.org/TR/did-core/" - indicates `did:iml` method's resolution payload.
-    /// All IANA registered official mime media types: https://www.iana.org/assignments/media-types/media-types.xhtml
-    ///
-    payload_type: String,
+    payload_type: PayloadType,
     /// ECDSA signature of rest of the Attachment.
     /// This proof is excluded from signature generation
     ///  and should not be included for correct verification.
     /// `current_sk` is used for signing from holding `Iml`.
     ///
-    #[serde(skip_serializing_if = "Option::is_none")]
-    proof: Option<Vec<u8>>,
+    proof: [u8; 32],
+}
+
+/// Types of accepted payloads within IML
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub enum PayloadType {
+    /// Used as satelite owner/origin identifying attachment to unique created content
+    Content,
+    /// Identifies interaction seal with other IML[s]
+    Interaction,
+    /// Any bytes blob of whatever
+    #[default]
+    Blob,
 }

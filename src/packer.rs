@@ -1,5 +1,6 @@
 use super::{Attachment, Iml, KeyType, UnlockedWallet};
-use crate::{error::Error, wallet::key_id_generate};
+use crate::{error::Error, wallet::key_id_generate, PayloadType};
+use arrayref::array_ref;
 use k256::ecdsa::{Signature, VerifyingKey};
 use libflate::deflate::{Decoder, Encoder};
 use std::{io::Read, sync::Arc};
@@ -14,16 +15,18 @@ impl Iml {
         wallet
             .new_key(KeyType::Ed25519_256, Some(next_sk_id))
             .unwrap();
-        let current_sk = wallet
-            .public_for(&current_sk_id)
-            .unwrap()
-            .to_sec1_bytes()
-            .into_vec();
-        let next_sk = wallet
-            .public_for(&next_sk_id)
-            .unwrap()
-            .to_sec1_bytes()
-            .into_vec();
+        let current_sk: [u8; 32] = array_ref!(
+            wallet.public_for(&current_sk_id).unwrap().to_sec1_bytes(),
+            0,
+            32
+        )
+        .to_owned();
+        let next_sk = array_ref!(
+            wallet.public_for(&next_sk_id).unwrap().to_sec1_bytes(),
+            0,
+            32
+        )
+        .to_owned();
         let id = blake3::hash(current_sk.as_ref()).to_string();
         let mut pre_signed = Iml {
             id: Some(id),
@@ -31,11 +34,16 @@ impl Iml {
             next_sk,
             ..Iml::default()
         };
-        let sig = wallet
-            .sign_with(pre_signed.as_verifiable(), &current_sk_id)
-            .unwrap()
-            .to_vec();
-        pre_signed.proof = Some(sig);
+        let sig = array_ref!(
+            wallet
+                .sign_with(pre_signed.as_verifiable(), &current_sk_id)
+                .unwrap()
+                .to_vec(),
+            0,
+            32
+        )
+        .to_owned();
+        pre_signed.proof = sig;
         pre_signed
     }
 
@@ -61,7 +69,7 @@ impl Iml {
             wallet.new_key_for(next_controller).unwrap();
             let new_next = wallet.public_for(&next_controller).unwrap().clone();
             // new next
-            evolved.next_sk = new_next.to_sec1_bytes().to_vec();
+            evolved.next_sk = array_ref!(new_next.to_sec1_bytes(), 0, 32).to_owned();
             // new current is old next
             evolved.current_sk = self.next_sk;
         }
@@ -69,7 +77,7 @@ impl Iml {
         let proof = wallet
             .sign_with(&evolved.as_verifiable(), &current_controller)
             .unwrap();
-        evolved.proof = Some(proof.to_vec());
+        evolved.proof = array_ref!(proof.to_vec(), 0, 32).to_owned();
         evolved
     }
 
@@ -108,12 +116,13 @@ impl Iml {
         wallet: Arc<UnlockedWallet>,
         peer: &VerifyingKey,
         payload: impl AsRef<[u8]>,
-        payload_type: String,
+        payload_type: PayloadType,
     ) -> Result<Attachment, Error> {
-        let proof = Some(self.sign_with_current(wallet, &payload)?.to_vec());
+        let proof =
+            array_ref!(self.sign_with_current(wallet, &payload)?.to_vec(), 0, 32).to_owned();
         Ok(Attachment {
-            parent: 0,
-            payload: payload.as_ref().to_vec(),
+            parent: self.proof,
+            payload: blake3::hash(payload.as_ref()).into(),
             payload_type,
             proof,
         })
@@ -142,14 +151,17 @@ impl Iml {
                 if self.get_civilization() > 0 {
                     self.inversion = Some(self.deflate());
                 }
-                self.current_sk = current.to_sec1_bytes().into_vec();
-                self.next_sk = next.to_sec1_bytes().into_vec();
-                self.proof = Some(
+                self.current_sk = array_ref!(current.to_sec1_bytes(), 0, 32).to_owned();
+                self.next_sk = array_ref!(next.to_sec1_bytes(), 0, 32).to_owned();
+                self.proof = array_ref!(
                     wallet
                         .sign_with(&self.as_verifiable(), &next_id)
                         .unwrap()
                         .to_vec(),
-                );
+                    0,
+                    32
+                )
+                .to_owned();
             }
         }
     }

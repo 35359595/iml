@@ -1,3 +1,4 @@
+use chacha20poly1305::aead::Error as ChaChaError;
 use serde_cbor::Error as CborError;
 use thiserror::Error;
 
@@ -13,10 +14,18 @@ pub enum Error {
     KeyNotFound,
     #[error("Key type is not supported (yet?)")]
     UnsupportedKeyType,
+    #[error("Chacha crypto failed {0}")]
+    Chacha(String),
 }
 
 impl From<CborError> for Error {
     fn from(_: CborError) -> Self {
         Error::CborFailed
+    }
+}
+
+impl From<ChaChaError> for Error {
+    fn from(value: ChaChaError) -> Self {
+        Error::Chacha(value.to_string())
     }
 }

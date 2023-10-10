@@ -27,11 +27,8 @@ impl Iml {
     pub fn previous(&self) -> Option<Iml> {
         Some(Iml::inflate(self.inversion.clone()?))
     }
-    pub fn proof(&self) -> Vec<u8> {
-        match self.proof.clone() {
-            Some(p) => p,
-            None => vec![],
-        }
+    pub fn proof(&self) -> [u8; 32] {
+        self.proof
     }
     pub fn attachments(&self) -> Option<Vec<Attachment>> {
         match &self.attachments {
@@ -42,7 +39,7 @@ impl Iml {
     pub fn as_verifiable(&self) -> Vec<u8> {
         let verifiable = Iml {
             attachments: None,
-            proof: None,
+            proof: [0u8; 32],
             inversion: None,
             ..self.clone()
         };

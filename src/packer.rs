@@ -15,18 +15,10 @@ impl Iml {
         wallet
             .new_key(KeyType::Ed25519_256, Some(next_sk_id))
             .unwrap();
-        let current_sk: [u8; 32] = array_ref!(
-            wallet.public_for(&current_sk_id).unwrap().to_sec1_bytes(),
-            0,
-            32
-        )
-        .to_owned();
-        let next_sk = array_ref!(
-            wallet.public_for(&next_sk_id).unwrap().to_sec1_bytes(),
-            0,
-            32
-        )
-        .to_owned();
+        let current_sk = wallet.public_for(&current_sk_id).unwrap().to_sec1_bytes();
+        let current_sk: [u8; 32] = array_ref!(current_sk, 0, 32).to_owned();
+        let next_sk = wallet.public_for(&next_sk_id).unwrap().to_sec1_bytes();
+        let next_sk = array_ref!(next_sk, 0, 32).to_owned();
         let id = blake3::hash(current_sk.as_ref()).to_string();
         let mut pre_signed = Iml {
             id: Some(id),
@@ -34,15 +26,11 @@ impl Iml {
             next_sk,
             ..Iml::default()
         };
-        let sig = array_ref!(
-            wallet
-                .sign_with(pre_signed.as_verifiable(), &current_sk_id)
-                .unwrap()
-                .to_vec(),
-            0,
-            32
-        )
-        .to_owned();
+        let sig = wallet
+            .sign_with(pre_signed.as_verifiable(), &current_sk_id)
+            .unwrap()
+            .to_bytes();
+        let sig = array_ref!(sig, 0, 32).to_owned();
         pre_signed.proof = sig;
         pre_signed
     }
@@ -67,17 +55,18 @@ impl Iml {
             key_id_generate(format!("sk_{}", evolved.get_civilization() + 1).into_bytes());
         if evolve_sk {
             wallet.new_key_for(next_controller).unwrap();
-            let new_next = wallet.public_for(&next_controller).unwrap().clone();
+            let new_next = wallet.public_for(&next_controller).unwrap().to_sec1_bytes();
             // new next
-            evolved.next_sk = array_ref!(new_next.to_sec1_bytes(), 0, 32).to_owned();
+            evolved.next_sk = array_ref!(new_next, 0, 32).to_owned();
             // new current is old next
             evolved.current_sk = self.next_sk;
         }
         // new proof with new current
         let proof = wallet
             .sign_with(&evolved.as_verifiable(), &current_controller)
-            .unwrap();
-        evolved.proof = array_ref!(proof.to_vec(), 0, 32).to_owned();
+            .unwrap()
+            .to_bytes();
+        evolved.proof = array_ref!(proof, 0, 32).to_owned();
         evolved
     }
 
@@ -118,8 +107,8 @@ impl Iml {
         payload: impl AsRef<[u8]>,
         payload_type: PayloadType,
     ) -> Result<Attachment, Error> {
-        let proof =
-            array_ref!(self.sign_with_current(wallet, &payload)?.to_vec(), 0, 32).to_owned();
+        let sig = self.sign_with_current(wallet, &payload)?.to_vec();
+        let proof = array_ref!(sig, 0, 32).to_owned();
         Ok(Attachment {
             parent: self.proof,
             payload: blake3::hash(payload.as_ref()).into(),
@@ -151,17 +140,15 @@ impl Iml {
                 if self.get_civilization() > 0 {
                     self.inversion = Some(self.deflate());
                 }
-                self.current_sk = array_ref!(current.to_sec1_bytes(), 0, 32).to_owned();
-                self.next_sk = array_ref!(next.to_sec1_bytes(), 0, 32).to_owned();
-                self.proof = array_ref!(
-                    wallet
-                        .sign_with(&self.as_verifiable(), &next_id)
-                        .unwrap()
-                        .to_vec(),
-                    0,
-                    32
-                )
-                .to_owned();
+                let current = current.to_sec1_bytes();
+                self.current_sk = array_ref!(current, 0, 32).to_owned();
+                let next = next.to_sec1_bytes();
+                self.next_sk = array_ref!(next, 0, 32).to_owned();
+                let proof = wallet
+                    .sign_with(&self.as_verifiable(), &next_id)
+                    .unwrap()
+                    .to_vec();
+                self.proof = array_ref!(proof, 0, 32).to_owned();
             }
         }
     }

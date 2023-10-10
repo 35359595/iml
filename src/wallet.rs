@@ -1,12 +1,21 @@
 use crate::error::Error;
+use arrayref::array_ref;
 use blake3::hash;
-use k256::ecdsa::{
-    signature::{Signer, Verifier},
-    Signature, SigningKey, VerifyingKey,
+use chacha20poly1305::{
+    aead::{Aead, AeadCore, KeyInit},
+    ChaCha20Poly1305,
+};
+use k256::{
+    ecdsa::{
+        signature::{Signer, Verifier},
+        Signature, SigningKey, VerifyingKey,
+    },
+    elliptic_curve::generic_array::GenericArray,
 };
 use rand::rngs::OsRng;
 use serde::{ser::SerializeSeq, Deserialize, Serialize};
 use std::collections::HashMap;
+use x25519_dalek::x25519;
 use zeroize::Zeroize;
 
 #[derive(PartialEq, Eq)]
@@ -80,6 +89,27 @@ impl UnlockedWallet {
             Ok(sk.sign(message.as_ref()))
         } else {
             Err(Error::EcdsaFailed)
+        }
+    }
+
+    pub fn aead_ecdh_with(
+        &self,
+        id: &KeyId,
+        whom: VerifyingKey,
+        data: impl AsRef<[u8]>,
+    ) -> Result<Vec<u8>, Error> {
+        if let Some(sk) = self.keys.get(id) {
+            let os = sk.to_bytes();
+            let ts = whom.to_sec1_bytes();
+            let shared = x25519(
+                array_ref![os, 0, 32].to_owned(),
+                array_ref![ts, 0, 32].to_owned(),
+            );
+            let cypher = ChaCha20Poly1305::new(GenericArray::from_slice(&shared));
+            let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+            Ok(cypher.encrypt(&nonce, data.as_ref())?)
+        } else {
+            Err(Error::KeyNotFound)
         }
     }
 }

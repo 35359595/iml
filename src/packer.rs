@@ -1,4 +1,4 @@
-use crate::wallet::key_id_generate;
+use crate::{error::Error, wallet::key_id_generate};
 
 use super::{Attachment, Iml, KeyType, UnlockedWallet};
 use libflate::deflate::{Decoder, Encoder};
@@ -103,7 +103,8 @@ impl Iml {
         iml
     }
 
-    pub fn interact(&self, peer_id: &str) -> Self {
+    pub fn interact(&self, peer_id: &str) -> Result<(), Error> {
+        let them = Iml::inflate(peer_id.as_bytes())?;
         todo!()
     }
 
@@ -151,11 +152,11 @@ impl Iml {
         deflated
     }
 
-    pub(crate) fn inflate(data: &[u8]) -> Self {
+    pub(crate) fn inflate(data: &[u8]) -> Result<Self, Error> {
         let mut decoder = Decoder::new(data);
         let mut decoded = String::new();
-        decoder.read_to_string(&mut decoded).unwrap();
-        serde_cbor::from_slice(&base64_url::decode(&decoded).unwrap()).unwrap()
+        decoder.read_to_string(&mut decoded)?;
+        Ok(serde_cbor::from_slice(&base64_url::decode(&decoded)?)?)
     }
 }
 

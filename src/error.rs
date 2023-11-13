@@ -13,6 +13,10 @@ pub enum Error {
     KeyNotFound,
     #[error("Key type is not supported (yet?)")]
     UnsupportedKeyType,
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    BaseDecodeError(#[from] base64_url::base64::DecodeError),
 }
 
 impl From<CborError> for Error {

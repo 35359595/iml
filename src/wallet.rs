@@ -1,4 +1,5 @@
 use crate::error::Error;
+use arrayref::array_ref;
 use blake3::hash;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
@@ -6,6 +7,7 @@ use k256::ecdsa::{
 };
 use rand::rngs::OsRng;
 use serde::{ser::SerializeSeq, Deserialize, Serialize};
+use static_dh_ecdh::ecdh::ecdh::{FromBytes, KeyExchange, PkP256, SkP256, ToBytes, ECDHNISTP256};
 use std::collections::HashMap;
 use zeroize::Zeroize;
 
@@ -82,6 +84,21 @@ impl UnlockedWallet {
             Err(Error::EcdsaFailed)
         }
     }
+
+    pub fn diffie_hellman(
+        &self,
+        key_id: &KeyId,
+        their_id: impl AsRef<[u8]>,
+    ) -> Result<[u8; 32], Error> {
+        if let Some(sk) = self.keys.get(key_id) {
+            let our_s = SkP256::from_bytes(&sk.to_bytes())?;
+            let their_pk = PkP256::from_bytes(their_id.as_ref())?;
+            let dx = ECDHNISTP256::generate_shared_secret(&our_s, &their_pk)?.to_bytes();
+            Ok(array_ref!(dx, 0, 32).to_owned())
+        } else {
+            Err(Error::KeyNotFound)
+        }
+    }
 }
 
 /// Transit type for crypto matherial secure storing
@@ -108,6 +125,7 @@ impl LockedWallet {
 
 pub enum KeyType {
     Ed25519_256,
+    EcdhP256,
 }
 
 /// Used to identify crypto content through the entire app

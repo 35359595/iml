@@ -9,11 +9,12 @@ edition = "2021"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
-k256 = { version = "^0.13", features = [ "ecdsa", "serde" ] }
+k256 = { version = "^0.13", features = [ "ecdsa", "serde", "ecdh" ] }
+static-dh-ecdh = "0.1.1"
 blake3 = "1.2.0"
 base64-url = "^2.0"
 libflate = "^2.0"
 zeroize = "^1.6"
 rand = "^0.8"
 thiserror = "^1"
-
+arrayref = "0.3.7"

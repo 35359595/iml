@@ -1,3 +1,8 @@
+use crate::{
+    error::Error,
+    wallet::{key_id_generate, UnlockedWallet},
+};
+
 use super::Iml;
 use k256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
 
@@ -25,6 +30,15 @@ impl Iml {
                 id == generated && verify_sig(&self)
             }
         }
+    }
+    /// Diffie-Hellman shared secret generator
+    pub fn diffie_hellman(
+        &self,
+        wallet: &UnlockedWallet,
+        their: impl AsRef<[u8]>,
+    ) -> Result<(), Error> {
+        wallet.diffie_hellman(&key_id_generate(self.get_current_sk()), their)?;
+        Ok(())
     }
 }
 

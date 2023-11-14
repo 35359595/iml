@@ -103,8 +103,10 @@ impl Iml {
         iml
     }
 
-    pub fn interact(&self, peer_id: &str) -> Result<(), Error> {
+    pub fn interact(&self, wallet: &UnlockedWallet, peer_id: &str) -> Result<(), Error> {
         let them = Iml::inflate(peer_id.as_bytes())?;
+        let their_pk = them.get_interacion_key().ok_or(Error::KeyNotFound)?;
+        let dx = self.diffie_hellman(wallet, &their_pk)?;
         todo!()
     }
 

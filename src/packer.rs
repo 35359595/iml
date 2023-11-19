@@ -15,15 +15,13 @@ impl Iml {
             .new_key(KeyType::Ed25519_256, Some(next_sk_id))
             .unwrap();
         let current_sk = wallet
-            .public_for(&current_sk_id)
+            .public_for(&current_sk_id, KeyType::Ed25519_256)
             .unwrap()
-            .to_sec1_bytes()
-            .into_vec();
+            .to_vec();
         let next_sk = wallet
-            .public_for(&next_sk_id)
+            .public_for(&next_sk_id, KeyType::Ed25519_256)
             .unwrap()
-            .to_sec1_bytes()
-            .into_vec();
+            .to_vec();
         let id = blake3::hash(current_sk.as_ref()).to_string();
         let mut pre_signed = Iml {
             id: Some(id),
@@ -58,9 +56,12 @@ impl Iml {
             key_id_generate(format!("sk_{}", evolved.get_civilization() + 1).into_bytes());
         if evolve_sk {
             wallet.new_key_for(next_controller).unwrap();
-            let new_next = wallet.public_for(&next_controller).unwrap().clone();
+            let new_next = wallet
+                .public_for(&next_controller, KeyType::Ed25519_256)
+                .unwrap()
+                .clone();
             // new next
-            evolved.next_sk = new_next.to_sec1_bytes().to_vec();
+            evolved.next_sk = new_next.to_vec();
             // new current is old next
             evolved.current_sk = self.next_sk;
         }
@@ -91,10 +92,10 @@ impl Iml {
         loop {
             iml.restore(wallet);
             if wallet
-                .public_for(&key_id_generate(format!(
-                    "sk_{}",
-                    iml.get_civilization() + 2
-                )))
+                .public_for(
+                    &key_id_generate(format!("sk_{}", iml.get_civilization() + 2)),
+                    KeyType::Ed25519_256,
+                )
                 .is_none()
             {
                 break;
@@ -117,16 +118,17 @@ impl Iml {
         } else {
             iml.id = self.id.clone()
         }
-        if let Some(current) =
-            wallet.public_for(&key_id_generate(format!("sk_{}", iml.get_civilization())))
-        {
+        if let Some(current) = wallet.public_for(
+            &key_id_generate(format!("sk_{}", iml.get_civilization())),
+            KeyType::Ed25519_256,
+        ) {
             let next_id = key_id_generate(format!("sk_{}", iml.get_civilization() + 1));
-            if let Some(next) = wallet.public_for(&next_id) {
+            if let Some(next) = wallet.public_for(&next_id, KeyType::Ed25519_256) {
                 if iml.get_civilization() > 0 {
                     iml.inversion = Some(serde_cbor::to_vec(&self).unwrap());
                 }
-                iml.current_sk = current.to_sec1_bytes().into_vec();
-                iml.next_sk = next.to_sec1_bytes().into_vec();
+                iml.current_sk = current.to_vec();
+                iml.next_sk = next.to_vec();
                 iml.proof = Some(
                     wallet
                         .sign_with(&iml.as_verifiable(), &next_id)

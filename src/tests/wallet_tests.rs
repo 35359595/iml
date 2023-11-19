@@ -20,13 +20,16 @@ fn diffie_hellman_generation_works_test() {
         .unwrap();
     bob.new_key(crate::wallet::KeyType::EcdhP256, Some(BOB_ID))
         .unwrap();
+    bob.new_key(crate::wallet::KeyType::Ed25519_256, Some(BOB_ID))
+        .unwrap();
+    let _ = bob.public_for(&BOB_ID, crate::wallet::KeyType::Ed25519_256);
     let a_pub = alice
         .public_for(&ALICE_ID, crate::wallet::KeyType::EcdhP256)
         .unwrap();
     let b_pub = bob
         .public_for(&BOB_ID, crate::wallet::KeyType::EcdhP256)
         .unwrap();
-    let a_dh = alice.diffie_hellman(&ALICE_ID, b_pub.as_ref()).unwrap();
-    let b_dh = bob.diffie_hellman(&BOB_ID, a_pub.as_ref()).unwrap();
+    let a_dh = alice.diffie_hellman(&ALICE_ID, b_pub).unwrap();
+    let b_dh = bob.diffie_hellman(&BOB_ID, a_pub).unwrap();
     assert_eq!(a_dh, b_dh);
 }

@@ -73,21 +73,21 @@ impl UnlockedWallet {
         }
     }
 
-    pub fn public_for(&self, id: &KeyId, key_type: KeyType) -> Option<[u8; 32]> {
+    pub fn public_for(&self, id: &KeyId, key_type: KeyType) -> Option<Vec<u8>> {
         let sk_bytes = self.keys.get(id)?;
         match key_type {
             KeyType::Ed25519_256 => {
                 if let Ok(sk) = SigningKey::from_slice(sk_bytes) {
-                    let sk = sk.verifying_key().to_sec1_bytes();
-                    Some(array_ref![sk, 0, 32].to_owned())
+                    let vk = sk.verifying_key().to_sec1_bytes();
+                    Some(vk.to_vec())
                 } else {
                     None
                 }
             }
             KeyType::EcdhP256 => {
                 if let Ok(sk) = SkP256::from_bytes(sk_bytes) {
-                    let sk = ECDHNISTP256::generate_public_key(&sk).to_bytes();
-                    Some(array_ref![sk, 0, 32].to_owned())
+                    let pk = ECDHNISTP256::generate_public_key(&sk).to_bytes();
+                    Some(pk.to_vec())
                 } else {
                     None
                 }

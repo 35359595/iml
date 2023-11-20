@@ -26,7 +26,7 @@ impl Iml {
             }
             None => {
                 let id = self.get_id();
-                let generated = blake3::hash(&self.current_sk).to_string();
+                let generated = hex::encode(&self.get_interacion_key());
                 id == generated && verify_sig(&self)
             }
         }

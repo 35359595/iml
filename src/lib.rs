@@ -23,8 +23,7 @@ pub struct Iml {
     /// Additionally used during interaction on public Iml to identify
     ///  recepient's Public key for KeyAgreement.
     ///
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    pub id: String,
     /// Indicates "age" of identifier.
     /// Is incremented on each evolution.
     /// Used to detect possible degradation on verification.
@@ -40,8 +39,7 @@ pub struct Iml {
     /// If this property is present - `id` pionts out
     ///  which key to use to generate shared secret.
     ///
-    #[serde(skip_serializing_if = "Option::is_none")]
-    interaction_key: Option<Vec<u8>>,
+    interaction_key: Vec<u8>,
     /// Any usefull payload.
     /// Is not included into verification of Iml, but
     ///  has proof of it's own internally, therefore
@@ -67,7 +65,7 @@ pub struct Iml {
     /// This field is not been signed in proof generation process.
     ///
     #[serde(skip_serializing_if = "Option::is_none")]
-    inversion: Option<Vec<u8>>,
+    inversion: Option<String>,
     /// ECDSA signature of rest of the Iml this proof and attachments excluded
     ///
     #[serde(skip_serializing_if = "Option::is_none")]

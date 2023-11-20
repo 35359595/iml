@@ -9,9 +9,9 @@ fn instantiation_test() {
 
 #[test]
 #[should_panic(
-    expected = "called `Result::unwrap()` on an `Err` value: IoError(Custom { kind: InvalidData, error: \"LEN={} is not the one's complement of NLEN={}\" })"
+    expected = "called `Result::unwrap()` on an `Err` value: HexError(InvalidHexCharacter { c: 'x', index: 1 })"
 )]
 fn interact_implemented_test() {
     let mut w = UnlockedWallet::new();
-    Iml::new(&mut w).interact(&w, "0x1234").unwrap();
+    Iml::new(&mut w).unwrap().interact(&w, "0x1234").unwrap();
 }

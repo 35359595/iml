@@ -1,11 +1,13 @@
 use crate::error::Error;
+use arrayref::array_ref;
 use blake3::hash;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
     Signature, SigningKey, VerifyingKey,
 };
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, RngCore};
 use serde::{ser::SerializeSeq, Deserialize, Serialize};
+use static_dh_ecdh::ecdh::ecdh::{FromBytes, KeyExchange, PkP256, SkP256, ToBytes, ECDHNISTP256};
 use std::collections::HashMap;
 use zeroize::Zeroize;
 
@@ -13,7 +15,7 @@ use zeroize::Zeroize;
 #[cfg_attr(test, derive(Debug))]
 pub struct UnlockedWallet {
     // TODO: fix this vec ugliness
-    keys: HashMap<KeyId, SigningKey>,
+    keys: HashMap<KeyId, [u8; 32]>,
 }
 
 impl UnlockedWallet {
@@ -32,10 +34,22 @@ impl UnlockedWallet {
                 } else {
                     key_id_generate(new_key.verifying_key().to_sec1_bytes())
                 };
-                self.keys.insert(id, new_key);
+                self.keys.insert(id, new_key.to_bytes().into());
                 Ok(id)
             }
-            _ => Err(Error::UnsupportedKeyType),
+            KeyType::EcdhP256 => {
+                let mut seed = [0u8; 32];
+                OsRng.fill_bytes(&mut seed);
+                let new_sk = ECDHNISTP256::generate_private_key(seed);
+                let new_pk = ECDHNISTP256::generate_public_key(&new_sk);
+                let key_id = if let Some(id) = id {
+                    id
+                } else {
+                    key_id_generate(new_pk.to_bytes())
+                };
+                self.keys.insert(key_id, new_sk.to_bytes().into());
+                Ok(key_id)
+            } //_ => Err(Error::UnsupportedKeyType),
         }
     }
 
@@ -43,7 +57,8 @@ impl UnlockedWallet {
         if let Some(_) = self.keys.get(&id) {
             Err(Error::KeyExistsForId)
         } else {
-            self.keys.insert(id, SigningKey::random(&mut OsRng {}));
+            self.keys
+                .insert(id, SigningKey::random(&mut OsRng {}).to_bytes().into());
             Ok(())
         }
     }
@@ -58,8 +73,26 @@ impl UnlockedWallet {
         }
     }
 
-    pub fn public_for(&self, id: &KeyId) -> Option<VerifyingKey> {
-        Some(self.keys.get(id)?.verifying_key().to_owned())
+    pub fn public_for(&self, id: &KeyId, key_type: KeyType) -> Option<Vec<u8>> {
+        let sk_bytes = self.keys.get(id)?;
+        match key_type {
+            KeyType::Ed25519_256 => {
+                if let Ok(sk) = SigningKey::from_slice(sk_bytes) {
+                    let vk = sk.verifying_key().to_sec1_bytes();
+                    Some(vk.to_vec())
+                } else {
+                    None
+                }
+            }
+            KeyType::EcdhP256 => {
+                if let Ok(sk) = SkP256::from_bytes(sk_bytes) {
+                    let pk = ECDHNISTP256::generate_public_key(&sk).to_bytes();
+                    Some(pk.to_vec())
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     pub fn verify_with(
@@ -68,8 +101,9 @@ impl UnlockedWallet {
         id: &KeyId,
         signature: &Signature,
     ) -> bool {
-        if let Some(vk) = self.public_for(id) {
-            vk.verify(message.as_ref(), signature).is_ok()
+        if let Some(vk) = self.public_for(id, KeyType::Ed25519_256) {
+            VerifyingKey::from_sec1_bytes(&vk)
+                .is_ok_and(|vk| vk.verify(message.as_ref(), signature).is_ok())
         } else {
             false
         }
@@ -77,9 +111,26 @@ impl UnlockedWallet {
 
     pub fn sign_with(&self, message: impl AsRef<[u8]>, id: &KeyId) -> Result<Signature, Error> {
         if let Some(sk) = self.keys.get(id) {
-            Ok(sk.sign(message.as_ref()))
+            Ok(SigningKey::from_bytes(sk.into())
+                .map_err(|_| Error::UnsupportedKeyType)?
+                .sign(message.as_ref()))
         } else {
             Err(Error::EcdsaFailed)
+        }
+    }
+
+    pub fn diffie_hellman(
+        &self,
+        key_id: &KeyId,
+        their_id: impl AsRef<[u8]>,
+    ) -> Result<[u8; 32], Error> {
+        if let Some(sk) = self.keys.get(key_id) {
+            let our_s = SkP256::from_bytes(sk.as_ref())?;
+            let their_pk = PkP256::from_bytes(their_id.as_ref())?;
+            let dx = ECDHNISTP256::generate_shared_secret(&our_s, &their_pk)?.to_bytes();
+            Ok(array_ref!(dx, 0, 32).to_owned())
+        } else {
+            Err(Error::KeyNotFound)
         }
     }
 }
@@ -106,8 +157,10 @@ impl LockedWallet {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyType {
     Ed25519_256,
+    EcdhP256,
 }
 
 /// Used to identify crypto content through the entire app
@@ -131,6 +184,17 @@ fn hasher_test() {
     assert_ne!(key_id_generate([1u8; 64]), [0u8; 4]);
 }
 
+#[test]
+fn pk_export_import_test() {
+    let mut seed = [0u8; 32];
+    OsRng.fill_bytes(&mut seed);
+    let new_sk = ECDHNISTP256::generate_private_key(seed);
+    let new_pk = ECDHNISTP256::generate_public_key(&new_sk);
+    let pk_bytes = new_pk.to_bytes();
+    let pk_from_bytes = PkP256::from_bytes(&pk_bytes).unwrap();
+    assert_eq!(new_pk, pk_from_bytes);
+}
+
 #[derive(Serialize, Deserialize)]
 struct KeysEntry {
     id: KeyId,
@@ -142,6 +206,15 @@ impl From<(KeyId, SigningKey)> for KeysEntry {
         Self {
             id: tuple.0,
             sk: tuple.1.to_bytes().into(),
+        }
+    }
+}
+
+impl From<(KeyId, [u8; 32])> for KeysEntry {
+    fn from(value: (KeyId, [u8; 32])) -> Self {
+        Self {
+            id: value.0,
+            sk: value.1,
         }
     }
 }
@@ -169,7 +242,7 @@ impl<'de> Deserialize<'de> for UnlockedWallet {
         Ok(Self {
             keys: Vec::<KeysEntry>::deserialize(deserializer)?
                 .into_iter()
-                .map(|kv| (kv.id, SigningKey::from_bytes(&kv.sk.into()).unwrap()))
+                .map(|kv| (kv.id, kv.sk))
                 .collect(),
         })
     }

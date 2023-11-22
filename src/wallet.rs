@@ -1,5 +1,4 @@
 use crate::error::Error;
-use arrayref::array_ref;
 use blake3::hash;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
@@ -123,12 +122,14 @@ impl UnlockedWallet {
         &self,
         key_id: &KeyId,
         their_id: impl AsRef<[u8]>,
-    ) -> Result<[u8; 32], Error> {
+    ) -> Result<Vec<u8>, Error> {
         if let Some(sk) = self.keys.get(key_id) {
             let our_s = SkP256::from_bytes(sk.as_ref())?;
             let their_pk = PkP256::from_bytes(their_id.as_ref())?;
-            let dx = ECDHNISTP256::generate_shared_secret(&our_s, &their_pk)?.to_bytes();
-            Ok(array_ref!(dx, 0, 32).to_owned())
+            Ok(ECDHNISTP256::generate_shared_secret(&our_s, &their_pk)?
+                .to_bytes()
+                .into_iter()
+                .collect())
         } else {
             Err(Error::KeyNotFound)
         }

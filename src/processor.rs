@@ -36,9 +36,8 @@ impl Iml {
         &self,
         wallet: &UnlockedWallet,
         their: impl AsRef<[u8]>,
-    ) -> Result<(), Error> {
-        wallet.diffie_hellman(&key_id_generate(self.get_current_sk()), their)?;
-        Ok(())
+    ) -> Result<Vec<u8>, Error> {
+        wallet.diffie_hellman(&key_id_generate(self.get_interacion_key()), their)
     }
 }
 

@@ -20,10 +20,18 @@ pub enum Error {
     NotADid,
     #[error("Incorrect did IML string")]
     NotAnIml,
+    #[error("Salsa aead Error occured")]
+    AeadError,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
     #[error(transparent)]
     HexError(#[from] hex::FromHexError),
+}
+
+impl From<crypto_secretbox::aead::Error> for Error {
+    fn from(_value: crypto_secretbox::aead::Error) -> Self {
+        Error::AeadError
+    }
 }
 
 impl From<CborError> for Error {

@@ -27,7 +27,7 @@ impl Iml {
     pub fn previous(&self) -> Option<Iml> {
         self.inversion
             .clone()
-            .and_then(|previous| Some(Self::inflate(previous).unwrap()))
+            .and_then(|previous| Some(Self::inflate(previous, None, None).unwrap()))
     }
     pub fn proof(&self) -> Vec<u8> {
         match self.proof.clone() {

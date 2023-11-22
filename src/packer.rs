@@ -1,6 +1,12 @@
-use crate::{error::Error, wallet::key_id_generate};
-
 use super::{Attachment, Iml, KeyType, UnlockedWallet};
+use crate::{
+    error::Error,
+    wallet::{key_id_generate, KeyId},
+};
+use crypto_secretbox::{
+    aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit, OsRng},
+    Nonce, XSalsa20Poly1305,
+};
 use libflate::deflate::{Decoder, Encoder};
 use static_dh_ecdh::ecdh::ecdh::{FromBytes, PkP256};
 use std::io::{Read, Write};
@@ -55,7 +61,7 @@ impl Iml {
         }
         let mut evolved = Iml::default();
         evolved.civilization = self.get_civilization() + 1;
-        evolved.inversion = Some(self.deflate().unwrap());
+        evolved.inversion = Some(self.deflate(None).unwrap().0);
         evolved.id = self.id;
         // becomes current
         let current_controller = key_id_generate(format!("sk_{}", evolved.get_civilization()));
@@ -112,16 +118,30 @@ impl Iml {
         iml
     }
 
-    pub fn interact(&self, wallet: &UnlockedWallet, peer_id: impl AsRef<str>) -> Result<(), Error> {
-        let them = Iml::inflate(peer_id)?;
+    // Makes little sense now but will include interaction artefacts later :)
+    pub fn interact(
+        &self,
+        wallet: &UnlockedWallet,
+        their_did: impl AsRef<str>,
+    ) -> Result<String, Error> {
+        let them = Iml::from_did(
+            their_did,
+            wallet,
+            key_id_generate(self.get_interacion_key()),
+        )?;
         let their_pk = them.get_interacion_key();
         let dx = self.diffie_hellman(wallet, &their_pk)?;
-        todo!()
+        self.as_did(Some(dx.to_vec()))
     }
 
-    pub fn from_did(did: impl AsRef<str>) -> Result<Self, Error> {
+    pub fn from_did(
+        did: impl AsRef<str>,
+        wallet: &UnlockedWallet,
+        our_id: KeyId,
+    ) -> Result<Self, Error> {
         let split: Vec<&str> = did.as_ref().split(SEPARATOR).collect();
-        if split.len() != 4
+        let len = split.len();
+        if len != 5
             || split[1] != "iml"
             // too expensive?
             || PkP256::from_bytes(&hex::decode(split[2])?).is_err()
@@ -131,11 +151,20 @@ impl Iml {
         if split[0] != "did" {
             return Err(Error::NotADid);
         }
-        Ok(serde_cbor::from_slice(&hex::decode(split[3])?)?)
+        // Authcrypt...
+        if !split[4].is_empty() {
+            let nonce = Nonce::from_slice(&hex::decode(split[4])?).to_owned();
+            let dx = wallet.diffie_hellman(&our_id, hex::decode(split[2])?)?;
+            Self::inflate(split[3], Some(dx), Some(nonce))
+        } else {
+            // RAW!!!
+            Self::inflate(split[3], None, None)
+        }
     }
 
-    pub fn as_did(&self) -> Result<String, Error> {
-        Ok(format!("did:iml:{}:{}", self.id, self.deflate()?))
+    pub fn as_did(&self, dh: Option<Vec<u8>>) -> Result<String, Error> {
+        let (deflated, nonce) = self.deflate(dh)?;
+        Ok(format!("did:iml:{}:{}:{}", self.id, deflated, nonce))
     }
 
     fn restore(&mut self, wallet: &UnlockedWallet) {
@@ -152,7 +181,7 @@ impl Iml {
             let next_id = key_id_generate(format!("sk_{}", iml.get_civilization() + 1));
             if let Some(next) = wallet.public_for(&next_id, KeyType::Ed25519_256) {
                 if iml.get_civilization() > 0 {
-                    iml.inversion = Some(self.deflate().unwrap());
+                    iml.inversion = Some(self.deflate(None).unwrap().0);
                 }
                 iml.current_sk = current.to_vec();
                 iml.next_sk = next.to_vec();
@@ -167,25 +196,44 @@ impl Iml {
         }
     }
 
-    fn deflate(&self) -> Result<String, Error> {
-        let serialized = &serde_cbor::to_vec(&self).unwrap();
+    /// Returns deflated, serialized and encrypted self + nonce
+    fn deflate(&self, encrypt: Option<Vec<u8>>) -> Result<(String, String), Error> {
+        // serialize
+        let mut serialized = serde_cbor::to_vec(&self).unwrap();
+        let mut nonce_string = String::default();
+        // encrypt
+        if let Some(dh) = encrypt {
+            let nonce = XSalsa20Poly1305::generate_nonce(&mut OsRng);
+            let cypher = XSalsa20Poly1305::new(GenericArray::from_slice(dh.as_ref()));
+            serialized = cypher.encrypt(&nonce, serialized.as_ref())?;
+            nonce_string = hex::encode(nonce);
+        }
+        // deflate
         let mut encoder = Encoder::new(Vec::new());
         encoder.write_all(&serialized)?;
         let deflated = encoder.finish().into_result().unwrap();
-        println!(
-            "from: {} to {} | {}%",
-            serialized.len(),
-            deflated.len(),
-            deflated.len() * 100 / serialized.len()
-        );
-        Ok(hex::encode(deflated))
+        // hex
+        Ok((hex::encode(deflated), nonce_string))
     }
 
-    pub(crate) fn inflate(data: impl AsRef<str>) -> Result<Self, Error> {
+    pub(crate) fn inflate(
+        data: impl AsRef<str>,
+        decrypt: Option<Vec<u8>>,
+        nonce: Option<Nonce>,
+    ) -> Result<Self, Error> {
+        // unhex
         let decoded_bytes = hex::decode(data.as_ref())?;
+        // inflate
         let mut decoder = Decoder::new(&decoded_bytes[..]);
         let mut decoded = Vec::new();
         decoder.read_to_end(&mut decoded)?;
+        // decrypt
+        if let Some(dh) = decrypt {
+            let nonce = nonce.ok_or(Error::AeadError)?;
+            let cypher = XSalsa20Poly1305::new(GenericArray::from_slice(&dh));
+            decoded = cypher.decrypt(&nonce, decoded.as_ref())?;
+        }
+        // de-serialize
         Ok(serde_cbor::from_slice(&decoded)?)
     }
 }
@@ -200,19 +248,38 @@ fn new_iml_plus_verification_test() {
     assert_eq!(1, iml.get_civilization());
     assert!(iml.verify());
     let mut iml = iml.evolve(&mut wallet, true, None);
-    println!("{}", iml.as_did().unwrap());
+    println!("{}", iml.as_did(None).unwrap());
     for i in 0..15 {
         iml = iml.evolve(&mut wallet, true, None);
         assert!(iml.verify());
         println!("Done {i} for {}", iml.id);
     }
     println!("deflating");
-    let deflated = iml.deflate().unwrap();
-    println!("deflated to: {}kb", deflated.len() / 1024);
-    let inflated = Iml::inflate(deflated).unwrap();
+    let deflated = iml.deflate(None).unwrap();
+    println!("deflated to: {}kb", deflated.0.len() / 1024);
+    let inflated = Iml::inflate(deflated.0, None, None).unwrap();
     assert_eq!(iml, inflated);
 
     //TODO: fix >1 evolution
     //let restored = Iml::re_evolve(&wallet, &iml.get_id(), None);
     //assert_eq!(iml, restored);
+}
+
+#[test]
+fn interact_proper_test() -> Result<(), Error> {
+    let mut a_wallet = UnlockedWallet::new();
+    let mut b_wallet = UnlockedWallet::new();
+    let a = Iml::new(&mut a_wallet)?;
+    let b = Iml::new(&mut b_wallet)?;
+    let a_did = a.as_did(Some(a_wallet.diffie_hellman(
+        &key_id_generate(a.get_interacion_key()), //38c
+        b.get_interacion_key(),
+    )?))?;
+    let b_did = b.as_did(Some(b_wallet.diffie_hellman(
+        &key_id_generate(b.get_interacion_key()), //4bc
+        a.get_interacion_key(),
+    )?))?;
+    assert!(a.interact(&a_wallet, &b_did).is_ok());
+    assert!(b.interact(&b_wallet, &a_did).is_ok());
+    Ok(())
 }

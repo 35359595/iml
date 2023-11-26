@@ -15,7 +15,7 @@ impl Iml {
                 }
                 let previous_sk = previous.get_next_sk();
                 if previous_sk == self.get_current_sk() {
-                    if verify_sig(&self) {
+                    if verify_sig(self) {
                         previous.verify()
                     } else {
                         false
@@ -26,8 +26,8 @@ impl Iml {
             }
             None => {
                 let id = self.get_id();
-                let generated = hex::encode(&self.get_interacion_key());
-                id == generated && verify_sig(&self)
+                let generated = hex::encode(self.get_interacion_key());
+                id == generated && verify_sig(self)
             }
         }
     }

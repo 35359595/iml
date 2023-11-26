@@ -44,8 +44,7 @@ impl Iml {
         };
         let sig = wallet
             .sign_with(pre_signed.as_verifiable(), &current_sk_id)
-            .unwrap()
-            .to_vec();
+            .unwrap();
         pre_signed.proof = Some(sig);
         Ok(pre_signed)
     }
@@ -81,9 +80,9 @@ impl Iml {
         }
         // new proof with new current
         let proof = wallet
-            .sign_with(&evolved.as_verifiable(), &current_controller)
+            .sign_with(evolved.as_verifiable(), &current_controller)
             .unwrap();
-        evolved.proof = Some(proof.to_vec());
+        evolved.proof = Some(proof);
         evolved
     }
 
@@ -118,11 +117,12 @@ impl Iml {
         iml
     }
 
-    // Makes little sense now but will include interaction artefacts later :)
+    /// Pack-encrypt self for target did with only selected attachments (or none)
     pub fn interact(
         &self,
         wallet: &UnlockedWallet,
         their_did: impl AsRef<str>,
+        attachments: Option<Vec<Attachment>>,
     ) -> Result<String, Error> {
         let them = Iml::from_did(
             their_did,
@@ -130,8 +130,10 @@ impl Iml {
             key_id_generate(self.get_interacion_key()),
         )?;
         let their_pk = them.get_interacion_key();
-        let dx = self.diffie_hellman(wallet, &their_pk)?;
-        self.as_did(Some(dx.to_vec()))
+        let mut to_pack = self.clone();
+        to_pack.attachments = attachments;
+        let dx = self.diffie_hellman(wallet, their_pk)?;
+        to_pack.as_did(Some(dx.to_vec()))
     }
 
     pub fn from_did(
@@ -185,12 +187,7 @@ impl Iml {
                 }
                 iml.current_sk = current.to_vec();
                 iml.next_sk = next.to_vec();
-                iml.proof = Some(
-                    wallet
-                        .sign_with(&iml.as_verifiable(), &next_id)
-                        .unwrap()
-                        .to_vec(),
-                );
+                iml.proof = Some(wallet.sign_with(iml.as_verifiable(), &next_id).unwrap());
                 *self = iml;
             }
         }
@@ -279,7 +276,7 @@ fn interact_proper_test() -> Result<(), Error> {
         &key_id_generate(b.get_interacion_key()), //4bc
         a.get_interacion_key(),
     )?))?;
-    assert!(a.interact(&a_wallet, &b_did).is_ok());
-    assert!(b.interact(&b_wallet, &a_did).is_ok());
+    assert!(a.interact(&a_wallet, b_did, None).is_ok());
+    assert!(b.interact(&b_wallet, a_did, None).is_ok());
     Ok(())
 }

@@ -4,9 +4,9 @@ mod getters;
 mod packer;
 mod processor;
 mod wallet;
-pub use getters::*;
+
 pub use packer::*;
-pub use processor::*;
+
 pub(crate) use wallet::*;
 
 #[cfg(test)]
@@ -16,7 +16,7 @@ mod tests;
 ///
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Iml {
-    /// Blake 3 hash of first sk of the identifier.
+    /// Blake 3 hash of first Diffie-Hellman interaction public key of the identifier.
     /// Never attached to higher level Imls.
     /// Can be resolved only if full Iml recoursion is parsable.
     ///
@@ -68,18 +68,17 @@ pub struct Iml {
     inversion: Option<String>,
     /// ECDSA signature of rest of the Iml this proof and attachments excluded
     ///
-    #[serde(skip_serializing_if = "Option::is_none")]
-    proof: Option<Vec<u8>>,
+    proof: Option<Signature>,
 }
 
 /// Attachment structure.
 /// Can be any payload.
 ///
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Attachment {
     /// `proof` of parent Iml
     ///
-    parent: u64,
+    parent: Signature,
     /// Useful data itself
     ///
     payload: Vec<u8>,

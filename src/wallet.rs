@@ -1,8 +1,9 @@
 use crate::error::Error;
 use blake3::hash;
+pub use k256::ecdsa::Signature;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
-    Signature, SigningKey, VerifyingKey,
+    SigningKey, VerifyingKey,
 };
 use rand::{rngs::OsRng, RngCore};
 use serde::{ser::SerializeSeq, Deserialize, Serialize};
@@ -15,6 +16,12 @@ use zeroize::Zeroize;
 pub struct UnlockedWallet {
     // TODO: fix this vec ugliness
     keys: HashMap<KeyId, [u8; 32]>,
+}
+
+impl Default for UnlockedWallet {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UnlockedWallet {
@@ -53,7 +60,7 @@ impl UnlockedWallet {
     }
 
     pub fn new_key_for(&mut self, id: KeyId) -> Result<(), Error> {
-        if let Some(_) = self.keys.get(&id) {
+        if self.keys.get(&id).is_some() {
             Err(Error::KeyExistsForId)
         } else {
             self.keys
@@ -171,7 +178,7 @@ pub(crate) type KeyId = [u8; 4];
 pub fn key_id_generate(s: impl AsRef<[u8]>) -> KeyId {
     let mut r = [0u8; 4];
     hash(s.as_ref()).as_bytes()[..4]
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(i, v)| r[i] = *v)
         .for_each(drop);

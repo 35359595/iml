@@ -1,21 +1,29 @@
 use crate::error::Error;
 use blake3::hash;
+use crypto_secretbox::{
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+    Nonce, XSalsa20Poly1305,
+};
 pub use k256::ecdsa::Signature;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
     SigningKey, VerifyingKey,
 };
-use rand::{rngs::OsRng, RngCore};
+use rand::RngCore;
 use serde::{ser::SerializeSeq, Deserialize, Serialize};
 use static_dh_ecdh::ecdh::ecdh::{FromBytes, KeyExchange, PkP256, SkP256, ToBytes, ECDHNISTP256};
 use std::collections::HashMap;
 use zeroize::Zeroize;
 
-#[derive(PartialEq, Eq)]
-#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(test, derive(Debug, PartialEq, Clone))]
 pub struct UnlockedWallet {
-    // TODO: fix this vec ugliness
     keys: HashMap<KeyId, [u8; 32]>,
+}
+
+impl Zeroize for UnlockedWallet {
+    fn zeroize(&mut self) {
+        self.keys.values_mut().for_each(Zeroize::zeroize);
+    }
 }
 
 impl Default for UnlockedWallet {
@@ -29,6 +37,17 @@ impl UnlockedWallet {
         Self {
             keys: HashMap::new(),
         }
+    }
+
+    pub fn lock(mut self, pass: impl AsRef<[u8]>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let locked = serde_cbor::to_vec(&self)?;
+        self.zeroize();
+        // TODO: extract into helper function
+        let cipher = XSalsa20Poly1305::new_from_slice(pass.as_ref())?;
+        let nonce = XSalsa20Poly1305::generate_nonce(&mut OsRng);
+        let mut locked = cipher.encrypt(&nonce, locked.as_ref())?.to_vec();
+        locked.extend_from_slice(nonce.as_slice());
+        Ok(locked)
     }
 
     pub fn new_key(&mut self, key_type: KeyType, id: Option<KeyId>) -> Result<KeyId, Error> {
@@ -155,12 +174,11 @@ impl LockedWallet {
         Self { content }
     }
 
-    pub fn unlock<S>(self, mut secret: S) -> Result<UnlockedWallet, Error>
+    pub fn unlock<S>(self, secret: S) -> Result<UnlockedWallet, Error>
     where
         S: AsRef<[u8]> + AsMut<[u8]>,
     {
         // TODO: implement crypto unlocking of content
-        secret.as_mut().zeroize();
         Ok(serde_cbor::from_slice(self.content.as_slice())?)
     }
 }
@@ -172,7 +190,7 @@ pub enum KeyType {
 }
 
 /// Used to identify crypto content through the entire app
-pub(crate) type KeyId = [u8; 4];
+pub type KeyId = [u8; 4];
 
 /// Only this function to be used to generate key ids
 pub fn key_id_generate(s: impl AsRef<[u8]>) -> KeyId {
@@ -199,7 +217,7 @@ fn pk_export_import_test() {
     let new_sk = ECDHNISTP256::generate_private_key(seed);
     let new_pk = ECDHNISTP256::generate_public_key(&new_sk);
     let pk_bytes = new_pk.to_bytes();
-    let pk_from_bytes = PkP256::from_bytes(&pk_bytes).unwrap();
+    let pk_from_bytes = PkP256::from_bytes(pk_bytes.as_ref()).unwrap();
     assert_eq!(new_pk, pk_from_bytes);
 }
 

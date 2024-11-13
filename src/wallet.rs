@@ -2,7 +2,7 @@ use crate::error::Error;
 use blake3::hash;
 use crypto_secretbox::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
-    Nonce, XSalsa20Poly1305,
+    cipher, Nonce, XSalsa20Poly1305,
 };
 pub use k256::ecdsa::Signature;
 use k256::ecdsa::{
@@ -39,12 +39,10 @@ impl UnlockedWallet {
         }
     }
 
-    pub fn lock(mut self, pass: impl AsRef<[u8]>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn lock(mut self, pass: impl AsRef<[u8]>) -> Result<Vec<u8>, Error> {
         let locked = serde_cbor::to_vec(&self)?;
         self.zeroize();
-        // TODO: extract into helper function
-        let cipher = XSalsa20Poly1305::new_from_slice(pass.as_ref())?;
-        let nonce = XSalsa20Poly1305::generate_nonce(&mut OsRng);
+        let (cipher, nonce) = build_cypher_and_random_nonce(pass)?;
         let mut locked = cipher.encrypt(&nonce, locked.as_ref())?.to_vec();
         locked.extend_from_slice(nonce.as_slice());
         Ok(locked)
@@ -178,8 +176,11 @@ impl LockedWallet {
     where
         S: AsRef<[u8]> + AsMut<[u8]>,
     {
-        // TODO: implement crypto unlocking of content
-        Ok(serde_cbor::from_slice(self.content.as_slice())?)
+        let (cipher, _) = build_cypher_and_random_nonce(secret)?;
+        let len = self.content.len();
+        let plaintext =
+            cipher.decrypt(self.content[len - 24..].into(), &self.content[..len - 24])?;
+        Ok(serde_cbor::from_slice(&plaintext)?)
     }
 }
 
@@ -272,4 +273,12 @@ impl<'de> Deserialize<'de> for UnlockedWallet {
                 .collect(),
         })
     }
+}
+
+pub(crate) fn build_cypher_and_random_nonce(
+    pass: impl AsRef<[u8]>,
+) -> Result<(XSalsa20Poly1305, Nonce), Error> {
+    let cipher = XSalsa20Poly1305::new_from_slice(pass.as_ref())?;
+    let nonce = XSalsa20Poly1305::generate_nonce(&mut OsRng);
+    Ok((cipher, nonce))
 }

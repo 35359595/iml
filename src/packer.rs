@@ -226,7 +226,7 @@ impl Iml {
         decoder.read_to_end(&mut decoded)?;
         // decrypt
         if let Some(dh) = decrypt {
-            let nonce = nonce.ok_or(Error::AeadError)?;
+            let nonce = nonce.ok_or(Error::CryptoBoxError("Nonce is required".to_string()))?;
             let cypher = XSalsa20Poly1305::new(GenericArray::from_slice(&dh));
             decoded = cypher.decrypt(&nonce, decoded.as_ref())?;
         }

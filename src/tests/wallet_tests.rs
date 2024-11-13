@@ -1,3 +1,6 @@
+use crypto_secretbox::{KeyInit, XSalsa20Poly1305};
+use rand::rngs::OsRng;
+
 use crate::{wallet::key_id_generate, LockedWallet, UnlockedWallet};
 
 #[test]
@@ -14,10 +17,10 @@ fn lock_and_unlock_test() {
     let mut w = UnlockedWallet::new();
     w.new_key_for(key_id_generate("ivan")).unwrap();
     let to_compare = w.clone();
-    const TEST_PASS: &str = "donotuseanywhere";
-    let locked_raw = w.lock(TEST_PASS);
+    let test_pass = XSalsa20Poly1305::generate_key(&mut OsRng);
+    let locked_raw = w.lock(&test_pass).unwrap();
     let unlocked: UnlockedWallet = LockedWallet::new(locked_raw)
-        .unlock(TEST_PASS.as_bytes().to_vec())
+        .unlock(test_pass.to_vec())
         .unwrap();
     assert_eq!(unlocked, to_compare);
 }

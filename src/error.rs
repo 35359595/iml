@@ -1,3 +1,4 @@
+use crypto_secretbox::{cipher::InvalidLength, Error as CryptoBoxError};
 use serde_cbor::Error as CborError;
 use static_dh_ecdh::CryptoError;
 use thiserror::Error;
@@ -20,17 +21,23 @@ pub enum Error {
     NotADid,
     #[error("Incorrect did IML string")]
     NotAnIml,
-    #[error("Salsa aead Error occured")]
-    AeadError,
+    #[error("CryptoBoxError")]
+    CryptoBoxError(String),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
     #[error(transparent)]
     HexError(#[from] hex::FromHexError),
 }
 
-impl From<crypto_secretbox::aead::Error> for Error {
-    fn from(_value: crypto_secretbox::aead::Error) -> Self {
-        Error::AeadError
+impl From<CryptoBoxError> for Error {
+    fn from(value: CryptoBoxError) -> Self {
+        Error::CryptoBoxError(value.to_string())
+    }
+}
+
+impl From<InvalidLength> for Error {
+    fn from(value: InvalidLength) -> Self {
+        Error::CryptoBoxError(value.to_string())
     }
 }
 

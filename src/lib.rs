@@ -3,7 +3,7 @@ pub mod error;
 mod getters;
 mod packer;
 mod processor;
-mod wallet;
+pub mod wallet;
 
 pub use packer::*;
 
@@ -86,8 +86,8 @@ pub struct Attachment {
     /// Defined per application.
     ///
     /// Reserved values are:
-    /// "https://www.w3.org/TR/did-core/" - indicates `did:iml` method's resolution payload.
-    /// All IANA registered official mime media types: https://www.iana.org/assignments/media-types/media-types.xhtml
+    /// "<https://www.w3.org/TR/did-core/>" - indicates `did:iml` method's resolution payload.
+    /// All IANA registered official mime media types: <https://www.iana.org/assignments/media-types/media-types.xhtml>
     ///
     payload_type: String,
     /// ECDSA signature of rest of the Attachment.

@@ -2,7 +2,7 @@ use crate::error::Error;
 use blake3::hash;
 use crypto_secretbox::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
-    cipher, Nonce, XSalsa20Poly1305,
+    Nonce, XSalsa20Poly1305,
 };
 pub use k256::ecdsa::Signature;
 use k256::ecdsa::{
@@ -163,15 +163,26 @@ impl UnlockedWallet {
 /// Transit type for crypto matherial secure storing
 /// Other crypto purposes shoud be done with `UnlockedWallet`
 /// Creates and is created from `UnlockedWallet` via serde_cbor ser/de-ser
-pub(crate) struct LockedWallet {
+pub struct LockedWallet {
     content: Vec<u8>,
 }
 
 impl LockedWallet {
+    /// Constructor, which takes encrypted content of previously constructed
+    /// and then encrypted [UnlockedWallet]
+    /// # Parameters
+    /// - `content` - encrypted content of [UnlockedWallet]
+    /// # Returns
+    /// - [LockedWallet] instance
     pub fn new(content: Vec<u8>) -> Self {
         Self { content }
     }
 
+    /// Decrypts content of this wallet into [UnlockedWallet]
+    /// # Parameters
+    /// - `secret` - secret phrase to decrypt content
+    /// # Returns
+    /// - [UnlockedWallet] instance
     pub fn unlock<S>(self, secret: S) -> Result<UnlockedWallet, Error>
     where
         S: AsRef<[u8]> + AsMut<[u8]>,

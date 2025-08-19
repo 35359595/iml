@@ -16,7 +16,7 @@ impl Iml {
     // TODO: make it Result and error if cannot reach id
     pub fn get_id(&self) -> String {
         if self.get_civilization() == 0 {
-            self.id.clone()
+            self.id.to_string()
         } else {
             match self.previous() {
                 Some(previous) => previous.get_id(),

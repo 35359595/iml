@@ -6,6 +6,9 @@ description = "Inverted Microledger"
 license = "Licensed under the EUPL-1.2-or-later"
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
@@ -19,3 +22,9 @@ rand = "^0.8"
 thiserror = "^1"
 arrayref = "0.3.7"
 hex = "0.4.3"
+
+wasm-bindgen = { version = "0.2.95", optional = true }
+
+[features]
+default = []
+wasm-gen = ["wasm-bindgen"]

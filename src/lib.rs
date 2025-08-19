@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm-gen")]
+pub use wasm_bindgen::prelude::*;
+
 pub mod error;
 mod getters;
 mod packer;
@@ -14,6 +17,7 @@ mod tests;
 
 /// Inverted Microledger
 ///
+#[cfg_attr(feature = "wasm-gen", wasm_bindgen)]
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Iml {
     /// Blake 3 hash of first Diffie-Hellman interaction public key of the identifier.
